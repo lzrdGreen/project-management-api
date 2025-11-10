@@ -12,7 +12,6 @@
 <p>Progress: {{ project.progress }}%</p>
 
 <p>Project Description: {{ project.description }}</p>
-<button onclick="window.open('{% url 'task_tree_view' project.id %}', '_blank')">Project Timeline</button>
 
 <!-- Display Messages -->
 {% if messages %}

@@ -11,10 +11,6 @@
 <p>Progress: {{ project.progress }}%</p>
 
 <p>Project Description: {{ project.description }}</p>
-<button onclick="window.open('{% url 'task_tree_view' project.id %}', '_blank')">Project Timeline</button>
-
-
-
 
 <!-- Button to switch to List View -->
 <button onclick="window.location.href='{% url 'project_detail' project.id %}'">Switch to Project's List View</button>

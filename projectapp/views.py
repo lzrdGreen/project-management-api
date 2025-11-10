@@ -1,17 +1,20 @@
-from django.shortcuts import render, get_object_or_404, redirect
+import json
 from django.db.models.functions import Lower
 from django.http import JsonResponse
 from django.db.models import Q
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth import login
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
-from django.contrib import messages
-import json
 from datetime import date
 from .models import Project, Task, Tag
 from .forms import ProjectForm, TaskForm
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import redirect
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.contrib import messages
+
 
 # Home page
 def main(request):
@@ -298,7 +301,7 @@ def search(request):
     return render(request, 'projectapp/search_results.html', context)
 
 
-# View to all projects' Board
+# View to Board
 def project_board(request, id):
     if not request.user.is_authenticated:          
         return redirect('home_page')
@@ -307,64 +310,11 @@ def project_board(request, id):
         'todo': project.tasks.filter(status='todo'),
         'in_progress': project.tasks.filter(status='in_progress'),
         'done': project.tasks.filter(status='done')
-    }
-    task_tree = build_task_tree(project)
+    }    
 
     can_edit = request.user.has_perm('projectapp.change_task')
 
-    return render(request, 'projectapp/project_board.html', {'project': project, 'tasks': tasks, 'task_tree': task_tree, 'can_edit': can_edit})
-
-
-def build_task_tree(project):    
-    the_tasks = list(project.tasks.all())
-    task_tree = [{"id": "root", "isroot": 1, "topic": project.title}]
-    
-    if len(the_tasks) == 0:
-        return task_tree
-    
-    # Initialize task counter for unique ids
-    k = 1
-    pid = 'root'
-    current_level = []
-    
-    # Process the first level of tasks (root level)
-    for task in the_tasks[:]:  # Create a shallow copy for safe removal
-        if task.parent_task_id is None:
-            task_tree.append({
-                "id": "task_" + str(k), 
-                "parentid": pid, 
-                "topic": task.title
-            })
-            the_tasks.remove(task)
-            current_level.append((task, "task_" + str(k)))  # Track task and its new id
-            k += 1
-    
-    # Process the deeper levels (children of current tasks)
-    while len(the_tasks) > 0:
-        task_list = current_level.copy()
-        current_level = []
-        for parent_task, parent_id in task_list:
-            for task in the_tasks[:]:  # Again, safe removal
-                if task.parent_task_id == parent_task.id:
-                    task_tree.append({
-                        "id": "task_" + str(k), 
-                        "parentid": parent_id, 
-                        "topic": task.title
-                    })
-                    the_tasks.remove(task)
-                    current_level.append((task, "task_" + str(k)))  # Track task and its new id
-                    k += 1
-    
-    return task_tree
-
-
-def task_tree_view(request, id):    
-    project = get_object_or_404(Project, id=id)
-    task_tree = build_task_tree(project)
-    return render(request, 'projectapp/task_tree.html', {
-        'project': project,
-        'task_tree': task_tree  
-    })
+    return render(request, 'projectapp/project_board.html', {'project': project, 'tasks': tasks, 'can_edit': can_edit})
 
 # View the details of the project
 def project_detail(request, id):
@@ -394,13 +344,11 @@ def project_detail(request, id):
     for task in tasks:
         task.overdue = task.is_overdue()
     
-    project_progress = project.calculate_progress()
-    task_tree = build_task_tree(project)
+    project_progress = project.calculate_progress()    
     
     return render(request, 'projectapp/project_detail.html', {
         'project': project,
-        'tasks': tasks,
-        'task_tree': task_tree,
+        'tasks': tasks,        
         'project_progress': project_progress,
         'can_add_task': can_add_task,
         'can_change_task': can_change_task,
@@ -456,6 +404,7 @@ def register(request):
     else:
         form = UserCreationForm()
     return render(request, 'projectapp/register.html', {'form': form})
+
 def hint(request):
     return render(request, 'projectapp/hint.html', {})
 

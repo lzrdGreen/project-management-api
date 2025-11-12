@@ -27,8 +27,13 @@
         {{ form.description }}
     </div>
     <div>
+        <label for="id_start_date">Start Date:</label>
+        {{ form.start_date }}
+    </div>
+    <div>
         <label for="id_due_date">Due Date:</label>
         {{ form.due_date }}
+        <p>(Due Date must be today or in the future)</p>
     </div>
     <div>
         <label for="id_priority">Priority:</label>
@@ -37,6 +42,8 @@
     <div>
         <label for="id_parent_task">The task depends on:</label>
         {{ form.parent_task}}
+        <p>* <strong>Finish-to-Start Rule enforced:</strong> The start date must be on or after the parent task's due date.</p>
+        <p>* For additional, less severe dependencies, please use the tag system.</p>
     </div>
     <div>
         <label for="id_status">Status:</label>

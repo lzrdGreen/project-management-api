@@ -52,6 +52,7 @@ class Task(models.Model):
     project = models.ForeignKey(Project, related_name='tasks', on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    start_date = models.DateField(null=True, blank=True)
     due_date = models.DateField()
     priority = models.IntegerField(choices=PRIORITY_CHOICES, default=MEDIUM)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='todo')
@@ -60,7 +61,8 @@ class Task(models.Model):
     tags = models.ManyToManyField(Tag, related_name='tasks', blank=True)
     
     def __str__(self):
-        return f'{self.title} (Depends on: {self.parent_task.title if self.parent_task else "None"})'
+        parent_info = f"Parent Due: {self.parent_task.due_date}" if self.parent_task else "No Parent"
+        return f'{self.title} (Starts: {self.start_date}, {parent_info})'
       
     def is_overdue(self):
         return self.due_date < date.today() and self.status != 'done'

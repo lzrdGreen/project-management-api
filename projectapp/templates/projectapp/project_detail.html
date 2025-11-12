@@ -57,25 +57,37 @@
     {% for task in tasks %}
     <li>
         <div class="{% if task.overdue %}overdue-task{% endif %}">
-        <a href="{% url 'task_detail' task.id %}" target="_blank">{{ task.title }}</a> - {{ task.get_priority_display }} - {{ task.status }} - Due: {{ task.due_date }}
-        <p>Description: {{ task.description }}</p>
+            <a href="{% url 'task_detail' task.id %}" target="_blank">
+                <b>{{ task.title }}</b>
+            </a> 
+            - {{ task.get_priority_display }} 
+            - {{ task.status }} 
+            - Starts: <b>{{ task.start_date|default:"(Not Set)" }}</b> 
+            - Due: <b>{{ task.due_date }}</b>
+
+            {% if task.parent_task %}
+                <span class="dependency-info">
+                    (Depends on: <a href="{% url 'task_detail' task.parent_task.id %}" title="Parent Due: {{ task.parent_task.due_date|date:'M d, Y' }}">
+                        {{ task.parent_task.title }}
+                    </a> | Ends: <b>{{ task.parent_task.due_date|date:"M d, Y" }}</b>)
+                </span>
+            {% endif %}
         </div>
         
-        <!-- Edit Task Button -->
+        <p>Description: {{ task.description }}</p>
+        
         <button 
             onclick="window.location.href='{% url 'task_edit' task.id %}'" 
             {% if not can_change_task %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
             Edit
         </button>
 
-        <!-- Delete Task Button with Confirmation -->
         <button 
             onclick="confirmDeleteTask('{{ task.id }}')" 
             {% if not can_delete_task %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
             Delete
         </button>
 
-        <!-- Inline form for deletion -->
         <form id="deleteTaskForm-{{ task.id }}" action="{% url 'task_delete' task.id %}" method="POST" style="display:none;">
             {% csrf_token %}
         </form>

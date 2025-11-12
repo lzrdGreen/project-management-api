@@ -33,7 +33,7 @@ class TaskForm(forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ['project', 'title', 'description', 'due_date', 'priority', 'status', 'parent_task', 'tags']
+        fields = ['project', 'title', 'description', 'start_date', 'due_date', 'priority', 'status', 'parent_task', 'tags']
 
         widgets = {
             'priority': forms.Select(choices=Task.PRIORITY_CHOICES),
@@ -55,19 +55,32 @@ class TaskForm(forms.ModelForm):
         else:
             # If no project, don't show any tasks in parent_task dropdown
             self.fields['parent_task'].queryset = Task.objects.none()
-            self.fields['tag'].widget = forms.Select(choices=[])
+            self.fields['tags'].widget = forms.Select(choices=[])
+            
+    def clean(self):
+        cleaned_data = super().clean()
+        parent_task = cleaned_data.get('parent_task')
+        start_date = cleaned_data.get('start_date')
+        due_date = cleaned_data.get('due_date')
 
-    def clean_parent_task(self):
-        parent_task = self.cleaned_data.get('parent_task')
-        if parent_task and parent_task == self.instance:
-            raise forms.ValidationError("A task cannot depend on itself.")
-        return parent_task
+        # 1. Self-Dependency Check (Already implemented, but good to include here)
+        if parent_task and self.instance and parent_task.id == self.instance.id:
+            self.add_error('parent_task', "A task cannot depend on itself.")
+            
+        # 2. Finish-to-Start (FS) Dependency Check
+        if parent_task and start_date:
+            # Check if the child task's start date is BEFORE the parent's due date.
+            if start_date < parent_task.due_date:
+                self.add_error(
+                    'start_date',
+                    f"The start date must be on or after the parent task's due date ({parent_task.due_date})."
+                )
 
-    def clean_due_date(self):
-        due_date = self.cleaned_data.get('due_date')
-        if due_date and due_date < timezone.now().date():
-            raise ValidationError('Due date cannot be in the past.')
-        return due_date
+        # 3. Basic Start/Due Integrity (Optional, but recommended)
+        if start_date and due_date and start_date > due_date:
+            self.add_error('due_date', "Due date cannot be before the start date.")
+            
+        return cleaned_data
     
     def save(self, commit=True):
         # Save the task without committing any many-to-many relationships yet
@@ -94,33 +107,7 @@ class TaskForm(forms.ModelForm):
 
         return task
 
-    """
-    def save(self, commit=True):
-        # Save the task without committing the many-to-many relationships yet
-        task = super().save(commit=False)
-
-        # Save the task first to ensure it gets a valid primary key (ID)
-        task.save()
-
-        # Handle the existing tags
-        tags = self.cleaned_data.get('tags')
-        if tags:
-            task.tags.set(tags)  # Assign the selected tags
-
-        # Handle new tags input
-        new_tags = self.cleaned_data.get('new_tags')
-        if new_tags:
-            new_tags_list = [tag.strip() for tag in new_tags.split(',')]
-            for tag_name in new_tags_list:
-                # Create new tag for the specific project
-                tag, created = Tag.objects.get_or_create(name=tag_name, project=task.project)
-                task.tags.add(tag)  # Add the new tag to the task
-
-        if commit:
-            task.save()  # Commit the task after handling the tags
-
-        return task
-    """
+    
     
 
 

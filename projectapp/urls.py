@@ -1,31 +1,38 @@
-from django.urls import path
+from django.urls import path, include
 from django.contrib.auth import views as auth_views
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from . import views
 
 urlpatterns = [
-    path('', views.main, name='home_page'), ###
-    path('projects/new/', views.project_create, name='project_create'),
-    path('project_list/', views.project_list, name='project_list'),
-    path('search/', views.search, name='search'),
-    path('projects/<int:id>/board/', views.project_board, name='project_board'),
-    path('project/<int:id>/', views.project_detail, name='project_detail'),    
-
-
-    
-    path('project/<int:id>/edit/', views.project_edit, name='project_edit'),
-    path('project/<int:id>/delete/', views.project_delete, name='project_delete'),
-       
-    
-    path('task/move/', views.task_move, name='task_move'),    
-    path('projects/<int:project_id>/tasks/new/', views.task_create, name='task_create'), #####
-    path('task/<int:id>/', views.task_detail, name='task_detail'),
-    path('task/<int:task_id>/edit/', views.task_edit, name='task_edit'),
-    path('task/<int:id>/delete/', views.task_delete, name='task_delete'),
-
-    path('register/', views.register, name='register'), 
+    # Static / Functional Views
+    path('', views.main, name='home_page'),
+    path('register/', views.register, name='register'),
     path('login/', auth_views.LoginView.as_view(template_name='projectapp/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('hint/', views.hint, name='hint'),
 
+    # --- Project Views (CBVs) ---
+    path('project_list/', views.ProjectListView.as_view(), name='project_list'),
+    path('projects/new/', views.ProjectCreateView.as_view(), name='project_create'),
+    path('project/<int:pk>/', views.ProjectDetailView.as_view(), name='project_detail'),
+    path('project/<int:pk>/edit/', views.ProjectUpdateView.as_view(), name='project_edit'),
+    path('project/<int:pk>/delete/', views.ProjectDeleteView.as_view(), name='project_delete'),
+
+    # --- Task Views (CBVs + Functional) ---
+    path('projects/<int:project_id>/tasks/new/', views.TaskCreateView.as_view(), name='task_create'),
+    path('task/<int:pk>/', views.TaskDetailView.as_view(), name='task_detail'),
+    path('task/<int:pk>/edit/', views.TaskUpdateView.as_view(), name='task_edit'),
+    path('task/<int:pk>/delete/', views.TaskDeleteView.as_view(), name='task_delete'),
+
+    # --- Other Functional Views ---
+    path('search/', views.search, name='search'),
+    path('projects/<int:id>/board/', views.project_board, name='project_board'),
+    path('task/move/', views.task_move, name='task_move'),
     path('project/<int:id>/tasks-by-tag/<int:tag_id>/', views.tasks_by_tag, name='tasks_by_tag'),
+    
+    path('api/', include('projectapp.api_urls')),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
+
+# For CBVs the URL parameter must be pk (not id)

@@ -65,13 +65,25 @@
             - Starts: <b>{{ task.start_date|default:"(Not Set)" }}</b> 
             - Due: <b>{{ task.due_date }}</b>
 
-            {% if task.parent_task %}
+            {% with prereqs=task.prerequisite_tasks.all %}
+            {% if prereqs %}
                 <span class="dependency-info">
-                    (Depends on: <a href="{% url 'task_detail' task.parent_task.id %}" title="Parent Due: {{ task.parent_task.due_date|date:'M d, Y' }}">
-                        {{ task.parent_task.title }}
-                    </a> | Ends: <b>{{ task.parent_task.due_date|date:"M d, Y" }}</b>)
+                    (Requires:
+                    {% for prereq in prereqs %}
+                        <a href="{% url 'task_detail' prereq.id %}" title="Prerequisite Due: {{ prereq.due_date|date:'M d, Y' }}">
+                            {{ prereq.title }}
+                        </a>
+                        {% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                    | Latest Finish: <b>
+                        {# Find the max due date among prerequisites for display #}
+                        {% with max_due=prereqs|dictsort:"due_date"|last %}
+                            {{ max_due.due_date|date:"M d, Y" }}
+                        {% endwith %}
+                    </b>)
                 </span>
             {% endif %}
+            {% endwith %}
         </div>
         
         <p>Description: {{ task.description }}</p>

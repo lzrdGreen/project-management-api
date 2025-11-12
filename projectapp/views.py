@@ -127,7 +127,6 @@ class ProjectUpdateView(LoginRequiredMixin, PermissionMixin, UpdateView):
         })
         return context
 
-
 class ProjectDeleteView(LoginRequiredMixin, PermissionMixin, DeleteView):
     model = Project
     template_name = 'projectapp/project_confirm_delete.html'

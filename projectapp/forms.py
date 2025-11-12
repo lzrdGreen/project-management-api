@@ -33,81 +33,87 @@ class TaskForm(forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ['project', 'title', 'description', 'start_date', 'due_date', 'priority', 'status', 'parent_task', 'tags']
+        fields = ['project', 'title', 'description', 'start_date', 'due_date', 'priority', 'status', 'prerequisite_tasks', 'tags']
 
         widgets = {
             'priority': forms.Select(choices=Task.PRIORITY_CHOICES),
         }
 
     def __init__(self, *args, **kwargs):
-        project = kwargs.pop('project', None)  # Extract project passed from view
-        super(TaskForm, self).__init__(*args, **kwargs)
+        project = kwargs.pop('project', None)
+        super().__init__(*args, **kwargs)
 
-        # Only show the tags that are associated with the project
+        # Filter available tags and prerequisite tasks to the same project
         if project:
             self.fields['tags'].queryset = project.tags.all()
-
-        if project:
-            # Filter to only include tasks from the same project and exclude the task being edited
-            self.fields['parent_task'].queryset = Task.objects.filter(project=project).exclude(id=self.instance.id)
-            self.fields['parent_task'].empty_label = f"Depends on project: {project.title}"           
-            
+            self.fields['prerequisite_tasks'].queryset = (
+                Task.objects.filter(project=project)
+                .exclude(id=self.instance.id)
+                .order_by('due_date')
+            )
         else:
-            # If no project, don't show any tasks in parent_task dropdown
-            self.fields['parent_task'].queryset = Task.objects.none()
-            self.fields['tags'].widget = forms.Select(choices=[])
+            self.fields['tags'].queryset = Tag.objects.none()
+            self.fields['prerequisite_tasks'].queryset = Task.objects.none()
+
+        self.fields['prerequisite_tasks'].help_text = (
+            "Select one or more tasks that must finish before this task starts. "
+            "If none selected, it depends on the project itself."
+        )
             
     def clean(self):
         cleaned_data = super().clean()
-        parent_task = cleaned_data.get('parent_task')
+        prerequisites = cleaned_data.get('prerequisite_tasks', [])
         start_date = cleaned_data.get('start_date')
         due_date = cleaned_data.get('due_date')
 
-        # 1. Self-Dependency Check (Already implemented, but good to include here)
-        if parent_task and self.instance and parent_task.id == self.instance.id:
-            self.add_error('parent_task', "A task cannot depend on itself.")
+        # Self-dependency check
+        if self.instance and self.instance.pk and self.instance in prerequisites:
+            self.add_error('prerequisite_tasks', "A task cannot depend on itself.")
+            return cleaned_data
+
+        # Finish-to-Start (FS) dependency check for multiple parents
+        if prerequisites and start_date:
+            # Find the latest due date among all selected prerequisites
+            latest_prereq_due_date = max(
+                [p.due_date for p in prerequisites if p.due_date] or [start_date]
+            )
             
-        # 2. Finish-to-Start (FS) Dependency Check
-        if parent_task and start_date:
-            # Check if the child task's start date is BEFORE the parent's due date.
-            if start_date < parent_task.due_date:
+            if start_date < latest_prereq_due_date:
                 self.add_error(
                     'start_date',
-                    f"The start date must be on or after the parent task's due date ({parent_task.due_date})."
+                    f"Start date must be on or after the latest prerequisite due date ({latest_prereq_due_date})."
                 )
 
-        # 3. Basic Start/Due Integrity (Optional, but recommended)
+        # Basic start < due validation
         if start_date and due_date and start_date > due_date:
             self.add_error('due_date', "Due date cannot be before the start date.")
-            
+
         return cleaned_data
     
     def save(self, commit=True):
-        # Save the task without committing any many-to-many relationships yet
-        task = super().save(commit=False)  # Get the Task instance but don't save
+        # Let Django handle instance creation and initial save
+        task = super().save(commit=commit)
 
-        # Save the task first to make sure it gets a valid primary key (ID)
-        task.save()  # This ensures task has an ID, crucial for many-to-many relationships
-
-        # Now handle the tags (Many-to-Many field)
-        tags = self.cleaned_data.get('tags')
-        if tags:
-            task.tags.set(tags)  # Set the tags (many-to-many) after saving the task
-        
-        # Handle new tags input
-        new_tags = self.cleaned_data.get('new_tags')
-        if new_tags:
-            new_tags_list = [tag.strip() for tag in new_tags.split(',')]
-            for tag_name in new_tags_list:
-                tag, created = Tag.objects.get_or_create(name=tag_name, project=task.project)
-                task.tags.add(tag)  # Add the new tag to the task's tags
-
+        # Only handle ManyToMany after commit (when PK exists)
         if commit:
-            task.save()  # Commit changes after handling the tags
+            # --- prerequisite tasks ---
+            prerequisites = self.cleaned_data.get('prerequisite_tasks')
+            if prerequisites is not None:
+                task.prerequisite_tasks.set(prerequisites)
+
+            # --- tags ---
+            tags = self.cleaned_data.get('tags')
+            if tags is not None:
+                task.tags.set(tags)
+
+            # --- new tags ---
+            new_tags = self.cleaned_data.get('new_tags', '')
+            if new_tags:
+                new_tags_list = [t.strip() for t in new_tags.split(',') if t.strip()]
+                for tag_name in new_tags_list:
+                    tag, _ = Tag.objects.get_or_create(name=tag_name, project=task.project)
+                    task.tags.add(tag)
 
         return task
-
-    
-    
 
 

@@ -57,12 +57,26 @@ class Task(models.Model):
     priority = models.IntegerField(choices=PRIORITY_CHOICES, default=MEDIUM)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='todo')
     created_at = models.DateTimeField(auto_now_add=True)
-    parent_task = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='subtasks')
+    prerequisite_tasks = models.ManyToManyField(
+        'self',
+        symmetrical=False,
+        blank=True,
+        related_name='dependents',
+    )
     tags = models.ManyToManyField(Tag, related_name='tasks', blank=True)
     
     def __str__(self):
-        parent_info = f"Parent Due: {self.parent_task.due_date}" if self.parent_task else "No Parent"
-        return f'{self.title} (Starts: {self.start_date}, {parent_info})'
+        prereqs = self.prerequisite_tasks.all()
+        prereq_count = prereqs.count()
+        
+        if prereq_count > 0:
+            # Find the latest due date among all prerequisites
+            latest_prereq_due = max(prereq.due_date for prereq in prereqs)
+            parent_info = f"Prereqs: {prereq_count}, Latest Due Date: {latest_prereq_due}"
+        else:
+            parent_info = "No Prerequisites"
+            
+        return f'{self.title} (Due: {self.due_date}, {parent_info})'
       
     def is_overdue(self):
         return self.due_date < date.today() and self.status != 'done'

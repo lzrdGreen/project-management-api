@@ -39,18 +39,13 @@
         <label for="id_priority">Priority:</label>
         {{ form.priority }}
     </div>
-    <div>
-        <label for="id_parent_task">The task depends on:</label>
-        {{ form.parent_task}}
-        <p>* <strong>Finish-to-Start Rule enforced:</strong> The start date must be on or after the parent task's due date.</p>
-        <p>* For additional, less severe dependencies, please use the tag system.</p>
-    </div>
+    
     <div>
         <label for="id_status">Status:</label>
         {{ form.status }}
     </div>
     <div>
-        <label for="id_tags">Tags:</label>
+        <label for="id_tags">Tags (Select or Deselect to Add or Remove):</label>
         {{ form.tags }}  <!-- The existing tags checkbox field -->
     </div>
     
@@ -60,7 +55,13 @@
         {{ form.new_tags }}
     </div>
 
-    
+    <div>
+        <label for="id_prerequisite_tasks">Prerequisite Tasks (Select Multiple):</label>
+        {{ form.prerequisite_tasks }}
+        <p>This field supports multiple selections (hold <b>Ctrl</b> on Windows/Linux or <b>Cmd</b> on Mac).</p>
+        <p><strong>Finish-to-Start Rule enforced:</strong> The start date of this task must be on or after the latest due date of all selected prerequisite tasks.</p>        
+    </div>
+
     <button type="submit" {% if not can_add_task and not can_change_task %}disabled{% endif %}>Save</button>
 </form>
 {% if not can_add_task and not can_change_task %}

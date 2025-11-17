@@ -16,7 +16,7 @@
     <!-- Manually render the fields you need: instead of {{ form.as_p }}-->
     <div>
         <label for="id_project">Project:</label>
-        {{ form.project }}
+        <p><a href="{% url 'project_detail' project.id %}">{{ project.title }}</a></p>
     </div>
     <div>
         <label for="id_title">Title:</label>
@@ -44,6 +44,13 @@
         <label for="id_status">Status:</label>
         {{ form.status }}
     </div>
+
+    <div>
+        <label for="id_milestone">Milestone:</label>
+        {{ form.milestone }}
+        <p class="helptext">Assign this task to a specific milestone (optional).</p>
+    </div>
+    
     <div>
         <label for="id_tags">Tags (Select or Deselect to Add or Remove):</label>
         {{ form.tags }}  <!-- The existing tags checkbox field -->
@@ -63,6 +70,12 @@
     </div>
 
     <button type="submit" {% if not can_add_task and not can_change_task %}disabled{% endif %}>Save</button>
+    <button 
+            type="button" 
+            class="cancel-button" 
+            onclick="window.location.href='{% url 'project_detail' pk=project.id %}'">
+            Cancel
+    </button>
 </form>
 {% if not can_add_task and not can_change_task %}
     <p>Sorry, but a permission is required to create or edit a task.</p>

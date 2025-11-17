@@ -25,6 +25,76 @@
 <!-- Button to toggle to board view -->
 <button onclick="window.location.href='{% url 'project_board' project.id %}'">Switch to Board View</button>
 
+<hr style="border-top: 2px solid #2166ac;">
+<!-- --------------------------------------- -->
+<!-- MILESTONES SECTION -->
+<!-- --------------------------------------- -->
+<h2>Project Milestones</h2>
+
+<!-- Add Milestone Button (Requires 'can_add_milestone' in context) -->
+<button 
+    onclick="window.location.href='{% url 'milestone_create' project.id %}'" 
+    {% if not can_add_milestone %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
+    Add New Milestone
+</button>
+{% if not can_add_milestone %}
+    <p class="small-text">You need permission to add a milestone.</p>
+{% endif %}
+
+<div class="milestone-list">
+    {% for milestone in project.milestones.all %}
+    <div class="milestone-card {% if milestone.is_complete %}completed{% else %}pending{% endif %}">
+        
+        <div class="milestone-status">
+            {% if milestone.is_complete %}
+                <span style="color: green; font-weight: bold;"> Completed</span>
+            {% else %}
+                <span style="color: orange; font-weight: bold;">... Pending</span>
+            {% endif %}
+        </div>
+        
+        <!-- Link the title directly to the MilestoneUpdateView for editing -->
+        <a href="{% url 'milestone_edit' pk=milestone.id %}" title="Click to Edit/Update">
+            <h3>{{ milestone.name }}</h3>
+        </a>
+        <p><small>(Click the Title to Edit)</small></p>
+        
+        <p>Target Date: <b>{{ milestone.due_date|default:"(Not Set)" }}</b></p>
+        
+        {% with task_count=milestone.tasks.count %}
+            <p>
+                <small>
+                    Related Tasks: {{ task_count }}
+                    {% if task_count > 0 %}
+                        <span onclick="toggleTasks('{{ milestone.id }}')" 
+                            style="cursor:pointer; color:#2166ac;">
+                            (show)
+                        </span>
+                    {% endif %}
+                </small>
+            </p>
+
+            <ul id="milestone-tasks-{{ milestone.id }}" 
+                class="milestone-task-list" 
+                style="display:none; margin-top:0;">
+                {% for t in milestone.tasks.all %}
+                <li>
+                    <a href="{% url 'task_detail' t.id %}">
+                        {{ t.title }}
+                    </a>
+                    <small>(Due: {{ t.due_date|date:"M d, Y" }})</small>
+                </li>
+                {% endfor %}
+            </ul>
+        {% endwith %}
+        
+    </div>
+    {% empty %}
+        <p>No milestones defined for this project yet. Start by adding one above!</p>
+    {% endfor %}
+</div>
+<hr style="border-top: 2px solid #2166ac;">
+
 <!-- Display tags as a list -->
 <h3>Filter Tasks by Tags:</h3>
 <p>(Opens in a new window)</p>
@@ -64,6 +134,20 @@
             - {{ task.status }} 
             - Starts: <b>{{ task.start_date|default:"(Not Set)" }}</b> 
             - Due: <b>{{ task.due_date }}</b>
+
+            {% comment %} 
+                Display the associated Milestone next to the task details. 
+            {% endcomment %}
+            {% if task.milestone %}
+                <span class="milestone-info">
+                    (Milestone: 
+                    <a href="{% url 'milestone_edit' pk=task.milestone.id %}" title="Edit Milestone">
+                        {{ task.milestone.name }}
+                    </a>)
+                </span>
+            {% else %}
+                 <span class="milestone-info">(No Milestone)</span>
+            {% endif %}
 
             {% with prereqs=task.prerequisite_tasks.all %}
             {% if prereqs %}
@@ -134,20 +218,92 @@
 </form>
 
 <script>
-    // JavaScript alert confirmation for deleting tasks
+    // JavaScript confirmation for deleting tasks
     function confirmDeleteTask(taskId) {
         if (confirm("Are you sure you want to delete this task?")) {
             document.getElementById(`deleteTaskForm-${taskId}`).submit();
         }
     }
 
-    // JavaScript alert confirmation for deleting projects
+    // JavaScript confirmation for deleting projects
     function confirmDeleteProject(projectId) {
         if (confirm("Are you sure you want to delete this project?")) {
             document.getElementById(`deleteProjectForm-${projectId}`).submit();
         }
     }
 
+    function toggleTasks(id) {
+        const element = document.getElementById("milestone-tasks-" + id);
+        element.style.display = (element.style.display === "none") ? "block" : "none";
+    }
 </script>
 
+<style>
+/* Styles for Milestones */
+.milestone-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: 2rem;
+}
+.milestone-card {
+    border: 1px solid #ddd;
+    padding: 1rem;
+    border-radius: 8px;
+    width: 250px;
+    min-height: 120px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.milestone-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 10px rgba(0,0,0,0.1);
+}
+.milestone-card h3 {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 1.1em;
+}
+.milestone-card a {
+    text-decoration: none;
+    color: #2166ac;
+    font-weight: bold;
+}
+.milestone-card a:hover {
+    text-decoration: underline;
+}
+.completed {
+    border-left: 6px solid #28a745; /* Green */
+    background-color: #f6fff9;
+}
+.pending {
+    border-left: 6px solid #ffc107; /* Yellow/Orange */
+    background-color: #fffaf0;
+}
+.milestone-status {
+    font-size: 0.9em;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed #eee;
+    margin-bottom: 0.5rem;
+}
+.milestone-task-list {
+    padding-left: 1.2rem;
+    margin-bottom: .5rem;
+    font-size: .9em;
+}
+.dependency-info, .milestone-info {
+    font-size: 0.9em;
+    color: #6c757d;
+}
+.overdue-task {
+    border: 2px solid red;
+    padding: 5px;
+    background-color: #ffeaea;
+    border-radius: 5px;
+}
+</style>
 {% endblock %}

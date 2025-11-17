@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from datetime import date
-from .models import Project, Task, Tag
+from .models import Project, Task, Milestone, Tag
+from rest_framework.exceptions import ValidationError
+
 # Serializers for the models, used to convert data
 # to and from JSON for API requests and responses.
 
@@ -24,6 +26,12 @@ class TaskSerializer(serializers.ModelSerializer):
     # --- Project info ---
     project_title = serializers.ReadOnlyField(source='project.title')
     
+    milestone = serializers.PrimaryKeyRelatedField(
+        queryset=Milestone.objects.all(),
+        allow_null=True,
+        required=False,        
+    )
+    
     # --- Prerequisite tasks ---
     prerequisite_tasks = serializers.PrimaryKeyRelatedField(
         queryset=Task.objects.all(),
@@ -37,10 +45,38 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = [
-            'id', 'title', 'description', 'start_date', 'due_date', 'priority', 'status', 'created_at', 'project', 'project_title', 
+            'id', 'title', 'description', 'start_date', 'due_date', 'priority', 'status', 'created_at', 'project', 'project_title', 'milestone',
             'prerequisite_tasks', 'prerequisite_task_ids', 'prerequisite_titles',
             'tags', 'tag_ids', 'new_tags'
         ]
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        request = self.context.get("request")
+        
+        # Only proceed if we have request context and the field exists
+        if not request or "prerequisite_tasks" not in self.fields:
+            return
+
+        project = None
+        if self.instance:
+            # Case 1: Updating existing Task
+            project = self.instance.project
+        elif request.data.get("project"):
+            # Case 2: Creating new Task (project is in request data)
+            try:
+                project = Project.objects.get(id=request.data["project"])
+            except Project.DoesNotExist:
+                # Let general validation catch invalid project ID later
+                pass
+        
+        if project:
+            # Filter prerequisite tasks to same-project only
+            self.fields["prerequisite_tasks"].queryset = Task.objects.filter(project=project)
+        else:
+            # Prevent selection if project is undetermined
+            self.fields["prerequisite_tasks"].queryset = Task.objects.none()
         
     # -----------------------------
     # Helper method for read-only representations
@@ -53,16 +89,53 @@ class TaskSerializer(serializers.ModelSerializer):
         """Returns a list of IDs for all prerequisite tasks."""
         return [task.id for task in obj.prerequisite_tasks.all()]
 
+    # --- Helper function for cycle detection ---
+    def has_cycle(self, start_task, target_task_id, visited=None):
+        """
+        Checks if a path exists from start_task (proposed prerequisite) 
+        back to the current task (target_task) in the existing graph.
+        """
+        if visited is None:
+            visited = set()
+        
+        if start_task.pk == target_task_id:
+            return True # Cycle detected!
+        
+        if start_task.pk in visited:
+            return False
+        
+        visited.add(start_task.pk)
+        
+        # We trace backward: check all parents of the start_task
+        for parent in start_task.prerequisite_tasks.all():
+            # Note: We must call the method recursively on self to pass the context if using self.
+            # But since it's a simple function, passing it as a regular function is fine.
+            if self.has_cycle(parent, target_task_id, visited):
+                return True
+        
+        return False
+    
     # Validation 
     def validate_due_date(self, value):
         if value and value < date.today():
-            raise serializers.ValidationError("Due date cannot be in the past.")
+            raise ValidationError("Due date cannot be in the past.")
         return value
 
     def validate(self, data):
         prerequisites = data.get('prerequisite_tasks', [])
         start_date = data.get('start_date')
         due_date = data.get('due_date')
+        project = data.get("project") or self.instance.project
+        milestone = data.get("milestone") if "milestone" in data else (
+            self.instance.milestone if self.instance else None
+        )
+        instance = self.instance
+        prerequisites = data.get('prerequisite_tasks', [])
+        
+        if milestone and milestone.project != project:
+            raise ValidationError({
+                "milestone": "Milestone must belong to the same project as the task."
+            })
 
         # Use instance fallback for partial updates
         if self.instance:
@@ -72,13 +145,30 @@ class TaskSerializer(serializers.ModelSerializer):
 
         # Self-dependency check
         if self.instance and self.instance.pk and self.instance in prerequisites:
-            raise serializers.ValidationError({
+            raise ValidationError({
+                'prerequisite_tasks': "A task cannot depend on itself."
+            })
+            
+        # The check only runs when UPDATING an existing task (where a cycle is possible)
+        if instance: 
+            target_id = instance.pk
+            
+            for proposed_prerequisite in prerequisites:
+                # We check only prerequisites that are saved objects (i.e., have a PK)
+                if proposed_prerequisite.pk and self.has_cycle(proposed_prerequisite, target_id):
+                    raise ValidationError({
+                        "prerequisite_tasks": f"Dependency cycle detected. Task cannot depend on {proposed_prerequisite.title}."
+                    })
+
+        # --- Self-dependency check (Existing) ---
+        if self.instance and self.instance.pk and self.instance in prerequisites:
+            raise ValidationError({
                 'prerequisite_tasks': "A task cannot depend on itself."
             })
 
         # Start < due
         if start_date and due_date and start_date > due_date:
-            raise serializers.ValidationError({
+            raise ValidationError({
                 'due_date': "Due date cannot be before the start date."
             })
 
@@ -89,7 +179,7 @@ class TaskSerializer(serializers.ModelSerializer):
             )
 
             if start_date < latest_prereq_due_date:
-                raise serializers.ValidationError({
+                raise ValidationError({
                     'start_date': f"Start date must be on or after the latest prerequisite due date ({latest_prereq_due_date})."
                 })
 
@@ -144,11 +234,47 @@ class TaskSerializer(serializers.ModelSerializer):
         return instance
 
 
+class MilestoneSerializer(serializers.ModelSerializer):
+    # Read-only field derived from the @property in the Milestone model
+    is_complete = serializers.ReadOnlyField() 
+    
+    # Read-only titles for ease of display (e.g., in a dropdown on the client)
+    project_title = serializers.ReadOnlyField(source='project.title')
+
+    class Meta:
+        model = Milestone
+        fields = [
+            'id', 'project', 'project_title', 'name', 'description', 
+            'due_date', 'milestone_type', 'is_complete', 
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    # --- Validation ---
+    
+    def validate_due_date(self, value):
+        """Validates that the due date is not in the past."""
+        from django.utils import timezone
+        if value and value < timezone.now().date():
+            raise serializers.ValidationError("Milestone due date cannot be in the past.")
+        return value
+
+    def validate(self, data):
+        """Performs validation that requires access to multiple fields."""
+        
+        # 1. Project Context Check (Crucial for WBS integrity)
+        # Ensure that when updating, the project FK cannot be changed (if necessary)
+        if self.instance and 'project' in data and data['project'] != self.instance.project:
+            raise serializers.ValidationError({"project": "Cannot change the project of an existing milestone."})        
+        
+        return data
+
 class ProjectSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
+    milestones = MilestoneSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     progress = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Project
-        fields = ['id', 'title', 'description', 'created_at', 'progress', 'tasks', 'tags']
+        fields = ['id', 'title', 'description', 'created_at', 'progress', 'tasks', 'tags', 'milestones']

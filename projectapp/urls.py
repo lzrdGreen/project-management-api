@@ -23,6 +23,14 @@ urlpatterns = [
     path('task/<int:pk>/', views.TaskDetailView.as_view(), name='task_detail'),
     path('task/<int:pk>/edit/', views.TaskUpdateView.as_view(), name='task_edit'),
     path('task/<int:pk>/delete/', views.TaskDeleteView.as_view(), name='task_delete'),
+    
+    # --- Milestone Views (CBVs) ---
+    # Create: Requires project_id to know where to attach the new milestone
+    path('projects/<int:project_id>/milestones/new/', views.MilestoneCreateView.as_view(), name='milestone_create'),
+    # Edit/Update: Requires pk (milestone ID)
+    path('milestone/<int:pk>/edit/', views.MilestoneUpdateView.as_view(), name='milestone_edit'),
+    # Delete: Requires pk (milestone ID)
+    path('milestone/<int:pk>/delete/', views.MilestoneDeleteView.as_view(), name='milestone_delete'),
 
     # --- Other Functional Views ---
     path('search/', views.search, name='search'),

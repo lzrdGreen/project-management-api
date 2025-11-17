@@ -4,6 +4,7 @@ from django.db.models import Q
 from django.db.models.functions import Lower
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
+from django.http import Http404
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.contrib.auth import login
@@ -13,8 +14,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import (
     ListView, DetailView, CreateView, UpdateView, DeleteView, View
 )
-from .models import Project, Task, Tag
-from .forms import ProjectForm, TaskForm
+from .models import Project, Task, Tag, Milestone
+from .forms import ProjectForm, TaskForm, MilestoneForm
 
 
 # ---------- STATIC VIEWS ----------
@@ -144,13 +145,13 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         project = self.object
         sort_by = self.request.GET.get('sort', 'title')
         if sort_by == 'priority':
-            tasks = project.tasks.all().order_by('-priority')
+            tasks = project.tasks.all().select_related('milestone').order_by('-priority')
         elif sort_by == 'due_date':
-            tasks = project.tasks.all().order_by('due_date')
+            tasks = project.tasks.all().select_related('milestone').order_by('due_date')
         elif sort_by == 'title':
-            tasks = project.tasks.all().annotate(lower_title=Lower('title')).order_by('lower_title')
+            tasks = project.tasks.all().annotate(lower_title=Lower('title')).select_related('milestone').order_by('lower_title')
         else:
-            tasks = project.tasks.all()
+            tasks = project.tasks.all().select_related('milestone')
 
         for task in tasks:
             task.overdue = task.is_overdue()
@@ -164,6 +165,9 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
             'can_delete_task': u.has_perm('projectapp.delete_task'),
             'can_change_project': u.has_perm('projectapp.change_project'),
             'can_delete_project': u.has_perm('projectapp.delete_project'),
+            'can_add_milestone': u.has_perm('projectapp.add_milestone'),
+            'can_change_milestone': u.has_perm('projectapp.change_milestone'),
+            'can_delete_milestone': u.has_perm('projectapp.delete_milestone'),
         })
         return context
 
@@ -187,16 +191,21 @@ class TaskCreateView(LoginRequiredMixin, PermissionMixin, CreateView):
     def form_valid(self, form):
         task = form.save(commit=False)
         task.project = self.project
-        if task.due_date < date.today():
-            form.add_error('due_date', 'Due date cannot be in the past.')
-            return self.form_invalid(form)
-
-        new_tags = self.request.POST.get('new_tags', '')
-        if new_tags:
-            tags_list = [tag.strip() for tag in new_tags.split(',')]
-            #task.tag = ','.join(tags_list)
-
         task.save()
+        form.save_m2m()
+
+        new_tags_str = self.request.POST.get('new_tags', '').strip()
+        if new_tags_str:
+            new_tags_list = [t.strip() for t in new_tags_str.split(',') if t.strip()]
+            
+            for tag_name in new_tags_list:
+                # Create the tag if it doesn't exist, linked to the project
+                tag, created = Tag.objects.get_or_create(name=tag_name, project=task.project)
+                # Assign the newly created/found tag to the task
+                task.tags.add(tag)
+
+        task.project.calculate_progress()
+        messages.success(self.request, f"Task '{task.title}' created successfully.")
         return redirect('project_detail', pk=self.project.id)
 
     def get_context_data(self, **kwargs):
@@ -218,23 +227,43 @@ class TaskUpdateView(LoginRequiredMixin, PermissionMixin, UpdateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['project'] = self.object.project
+        kwargs['project'] = Project.objects.get(pk=self.object.project_id)
         return kwargs
+    
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if not obj.project_id:
+            raise Http404("Task is missing a project assignment.")
+        return obj
 
     def form_valid(self, form):
+        current_project = Project.objects.get(pk=self.object.project_id)
         task = form.save(commit=False)
-        new_tags = self.request.POST.get('new_tags', '')
-        if new_tags:
-            tags_list = [tag.strip() for tag in new_tags.split(',')]
-            #task.tag = ','.join(tags_list)
+        if not task.project_id: ###
+            task.project = current_project ###
         task.save()
+        form.save_m2m()
+        
+        new_tags_str = self.request.POST.get('new_tags', '').strip()
+        if new_tags_str:
+            new_tags_list = [t.strip() for t in new_tags_str.split(',') if t.strip()]
+            
+            for tag_name in new_tags_list:
+                # Get or create the tag, linked to the project (using task.project which is the existing project)
+                tag, created = Tag.objects.get_or_create(name=tag_name, project=task.project)
+                # Assign the newly created/found tag to the task
+                task.tags.add(tag)
+        
+        task.project.calculate_progress()
+        messages.success(self.request, f"Task '{task.title}' updated successfully.")
         return redirect('project_detail', pk=task.project.id)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         u = self.request.user
+        project = Project.objects.get(pk=self.object.project_id)
         context.update({
-            'project': self.object.project,
+            'project': project,
             'task': self.object,
             'can_add_task': u.has_perm('projectapp.add_task'),
             'can_change_task': u.has_perm('projectapp.change_task'),
@@ -346,3 +375,102 @@ def tasks_by_tag(request, id, tag_id):
         'tasks': tasks,
         'tag': get_object_or_404(Tag, id=tag_id),
     })
+
+
+class MilestoneCreateView(LoginRequiredMixin, PermissionMixin, CreateView):
+    model = Milestone
+    form_class = MilestoneForm
+    template_name = 'projectapp/milestone_form.html'
+    permission_required = 'projectapp.add_milestone' 
+
+    def dispatch(self, request, *args, **kwargs):
+        self.project = get_object_or_404(Project, id=kwargs['project_id'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['project'] = self.project        
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.project = self.project
+        response = super().form_valid(form)  # This calls form.save()
+        
+        # Recalculate progress after save
+        self.project.calculate_progress()
+        messages.success(self.request, f"Milestone '{form.instance.name}' created successfully.")
+        
+        return response
+
+    def get_success_url(self):
+        return reverse_lazy('project_detail', kwargs={'pk': self.project.id})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['project'] = self.project
+        context['can_add_milestone'] = self.request.user.has_perm(self.permission_required)
+        return context
+    
+class MilestoneUpdateView(LoginRequiredMixin, PermissionMixin, UpdateView):
+    model = Milestone
+    form_class = MilestoneForm
+    template_name = 'projectapp/milestone_form.html'
+    permission_required = 'projectapp.change_milestone'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['project'] = self.object.project
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['project'] = self.object.project
+        context['can_delete_milestone'] = self.request.user.has_perm('projectapp.delete_milestone')
+        context['can_change_milestone'] = self.request.user.has_perm(self.permission_required)
+        return context
+    
+    def form_valid(self, form):
+        response = super().form_valid(form)  # This calls form.save()
+        
+        # Recalculate progress after save
+        self.object.project.calculate_progress()
+        messages.success(self.request, f"Milestone '{form.instance.name}' updated successfully.")
+        
+        return response
+
+    def get_success_url(self):
+        return reverse_lazy('project_detail', kwargs={'pk': self.object.project.id})
+
+
+class MilestoneDeleteView(LoginRequiredMixin, PermissionMixin, DeleteView):
+    """
+    Handles the deletion of an existing Milestone.
+    """
+    model = Milestone
+    template_name = 'projectapp/milestone_confirm_delete.html'
+    permission_required = 'projectapp.delete_milestone'
+
+    def get_success_url(self):
+        # Store project ID before deletion
+        project_id = self.object.project.id
+        return reverse_lazy('project_detail', kwargs={'pk': project_id})
+    
+    def form_valid(self, form):
+        project = self.object.project
+        milestone_title = self.object.name
+
+        response = super().form_valid(form)
+        
+        # Recalculate project progress after deletion
+        project.calculate_progress()
+
+        messages.success(self.request, f"Milestone '{milestone_title}' deleted successfully.")
+        return response
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Milestone'
+        # Pass parent object ID for the cancel link in confirm_delete.html
+        context['parent_object_id'] = self.object.project.id 
+        context['can_delete_milestone'] = self.request.user.has_perm(self.permission_required)
+        return context

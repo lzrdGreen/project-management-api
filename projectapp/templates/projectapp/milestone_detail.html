@@ -1,0 +1,87 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Milestone: {{ milestone.name }}{% endblock %}
+
+{% block content %}
+    <div class="header-section">
+        <h1>{{ milestone.name }}</h1>
+        
+    </div>
+
+    <p>
+        <strong>Project:</strong> 
+        <a href="{% url 'project_detail' milestone.project.id %}">{{ milestone.project.title }}</a>
+    </p>
+    <p>
+        <strong>Target Date:</strong> {{ milestone.due_date }} 
+        {% if milestone.is_complete %}
+            <span class="status-complete">(Complete!)</span>
+        {% elif milestone.latest_due_date < milestone.due_date %}
+            <span class="status-warning">(Tasks Due Later: {{ milestone.latest_due_date }})</span>
+        {% endif %}
+    </p>
+    <p>
+        <strong>Type:</strong> 
+        {% if milestone.milestone_type %}
+            {{ milestone.get_milestone_type_display }}
+        {% else %}
+            (Not Specified)
+        {% endif %}
+    </p>
+    <p><strong>Description:</strong> {{ milestone.description|default:"No description provided." }}</p>
+
+
+    <h2>Linked Tasks ({{ tasks|length }}):</h2>
+    
+    
+    {% if tasks %}
+        <ul class="task-list">
+        {% for task in tasks %}
+            <li class="task-item status-{{ task.status }}">
+                <a href="{% url 'task_detail' task.id %}">{{ task.title }}</a> 
+                (Status: {{ task.get_status_display }})
+                {% if task.is_overdue %}
+                    <span class="status-overdue">(Overdue)</span>
+                {% endif %}
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No tasks are currently assigned to this milestone.</p>
+        {% if can_add_task %}
+            <p>
+                <a href="{% url 'task_create' milestone.project.id %}">Add a new task</a> and assign it to this milestone.
+            </p>
+        {% endif %}
+    {% endif %}
+
+    
+        
+    <div class="actions">
+            <button onclick="window.location.href='{% url 'project_detail' milestone.project.id %}'">
+            ← Back to Project
+            </button>
+            {% if can_change_milestone %}
+                <button onclick="window.location.href='{% url 'milestone_edit' milestone.id %}'">
+                    Edit Milestone
+                </button>
+            {% endif %}
+            {% if can_delete_milestone %}
+                <button 
+                    onclick="confirmDeleteMilestone('{{ milestone.id }}')">
+                    Delete
+                </button>
+                <form id="deleteMilestoneForm-{{ milestone.id }}" action="{% url 'milestone_delete' milestone.id %}" method="POST" style="display:none;">
+                    {% csrf_token %}
+                </form>
+            {% endif %}
+    </div>    
+
+    <script>
+        function confirmDeleteMilestone(milestoneId) {
+            if (confirm("Are you sure you want to delete this milestone? All linked tasks will remain on the project.")) {
+                document.getElementById(`deleteMilestoneForm-${milestoneId}`).submit();
+            }
+        }
+    </script>
+{% endblock %}

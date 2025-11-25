@@ -1,0 +1,27 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Hint{% endblock %}
+{% block content %}
+<h1 style="text-align: center;">Welcome to Project Management System</h1>
+<p>Thank you for your interest in this Project Management System. Of course, you can register and take a tour.</p>
+<p>Or your could <a href="{% url 'login' %}">login</a> using:</p>
+<h2>Username: guest</h2>
+<h2>Password: guest_password</h2>
+<hr style ="border: 2px solid #2166ac;">
+<h1 style="text-align: center;">Project Management System (PMS) App</h1>
+<h2>Purpose</h2>
+<p>The PMS app is designed to provide a user-friendly, versatile project management solution. It allows users to efficiently create, view, edit, and delete tasks and projects (CRUD operations), offering both list and board views for project visualisation. The app aims to streamline project management processes while maintaining simplicity and usability.</p>
+<h2>Key Features</h2>
+<ul>
+    <li><p>Dual view options: list and board views for projects</p></li>
+    <li><p>Search functionality across projects and tasks </p></li>
+    <li><p>Intuitive user interface</p></li>
+    <li><p>Streamlined project management workflows to enhance productivity</p></li>
+    <li><p>Task and project CRUD operations</p></li>
+    <li><p>Content creation and editing according to user permissions</p></li>
+    <li><p>Task prioritisation and categorisation</p></li>
+</ul>
+<h2>Core Philosophy</h2>
+<p>Simplicity, usability, and added value are at the heart of the PMS app. The focus is on delivering essential features that enhance project management without overwhelming users with complexity.</p>
+
+{% endblock %}

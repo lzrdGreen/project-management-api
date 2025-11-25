@@ -1,0 +1,132 @@
+body {
+    font-family: Tahoma, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f7f7f7;
+}
+
+header {
+    background-color: #2166ac;
+    color: #fff;
+    padding: 10px 0;
+}
+
+header nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+}
+
+header nav ul li {
+    margin: 0 15px;
+}
+
+header nav ul li a {
+    color: white;
+    text-decoration: none;
+}
+
+main {
+    margin: 20px;
+}
+
+footer {
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px 0;
+    background-color: #2166ac;
+    color: white;
+}
+
+button {
+    background-color: #d2e0ee; /* #d1e5f0 */
+    border: 2px solid #2166ac;
+    cursor: pointer;
+    padding: 5px 9px;
+    border-radius: 3px;
+}
+
+.progress-bar-container {
+    width: 50%;
+    background-color: #e0e0e0;
+    border-radius: 5px;
+    height: 24px;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: #b2182b;    
+    border-radius: 5px;    
+}
+
+.overdue-task {
+    background-color: #f7e7e9;  
+    color: #b2182b;          
+}
+
+.overdue-warning {
+    color: #c14655;
+    font-weight: bold;
+}
+
+.milestone-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: 2rem;
+}
+.milestone-card {
+    border: 1px solid #ddd;
+    padding: 1rem;
+    border-radius: 8px;
+    width: 250px;
+    min-height: 120px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.milestone-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 10px rgba(0,0,0,0.1);
+}
+.milestone-card h3 {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 1.1em;
+}
+.milestone-card a {
+    text-decoration: none;
+    color: #2166ac;
+    font-weight: bold;
+}
+.milestone-card a:hover {
+    text-decoration: underline;
+}
+.milestone-card.completed {
+    border-left: 6px solid #276419;
+    background-color: #e9efe8;
+}
+.milestone-card.pending {
+    border-left: 6px solid orange;
+    background-color: #fffaf0;
+}
+.milestone-status {
+    font-size: 0.9em;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed #eee;
+    margin-bottom: 0.5rem;
+}
+.milestone-task-list {
+    padding-left: 1.2rem;
+    margin-bottom: .5rem;
+    font-size: .9em;
+}
+.dependency-info, .milestone-info {
+    font-size: 0.9em;
+    color: #6c757d;
+}

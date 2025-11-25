@@ -1,0 +1,129 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}
+    {% if object %}
+        Edit Milestone for {{ project.title }}
+    {% else %}
+        Create Milestone for {{ project.title }}
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if object %}
+        <h1>Edit Milestone: {{ object.name }} ({{ project.title }})</h1> {% else %}
+        <h1>Create Milestone for {{ project.title }}</h1>
+    {% endif %}
+
+<form method="POST">
+    {% csrf_token %}
+    {{ form.project }} {% if form.errors %}
+        <ul class="error-list">
+            {% for field, errors in form.errors.items %}
+                <li>{{ field }}: {{ errors|join:", " }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <div>
+        <label for="id_name">Milestone Title:</label>
+        {{ form.name }} </div>
+    
+    <div>
+        <label for="id_description">Description:</label>
+        {{ form.description }}
+    </div>
+
+    <div>
+        <label for="id_milestone_type">Type:</label>
+        {{ form.milestone_type }}
+    </div>
+    
+    <div>
+        <label for="id_due_date">Target Date:</label>
+        {{ form.due_date }}
+        <p class="helptext">The target date for reaching this milestone (cannot be in the past).</p>
+    </div>
+
+    <div>
+        <label for="id_tasks">Associate Tasks:</label>
+        {{ form.tasks }}
+        <p class="helptext">{{ form.tasks.help_text }}</p>
+    </div>
+
+    {% if form.is_completed %}
+    <div>
+        <label for="id_is_completed">Completed:</label>
+        {{ form.is_completed }}
+        <p class="helptext">Mark this milestone as completed.</p>
+    </div>
+    {% endif %}
+    
+    <div>
+        {% if object %}
+        <button type="submit" {% if not can_change_milestone %}disabled{% endif %}>Update Milestone</button>
+        
+        {% url 'milestone_delete' pk=object.pk as delete_url %}
+        
+        <button type="button" 
+                class="button delete-button"
+                onclick="window.location.href='{{ delete_url }}'"
+                {% if not can_delete_milestone %}disabled{% endif %}>
+            Delete
+        </button>
+        
+        {% else %}
+        <button type="submit" {% if not can_add_milestone %}disabled{% endif %}>Create Milestone</button>
+        {% endif %}
+        
+        <button type="button" 
+                class="button cancel-button" 
+                onclick="window.location.href='{% url 'project_detail' pk=project.id %}'">
+            Cancel
+        </button>
+    </div>
+</form>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const select = document.getElementById("id_tasks");
+
+        for (const option of select.options) {
+            const text = option.textContent;
+            const match = text.match(/Due:\s*([0-9\-]+)/);
+            if (match) {
+                option.dataset.dueDate = match[1];
+            }
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const taskSelect = document.getElementById("id_tasks");
+        const dateInput  = document.getElementById("id_due_date");
+
+        function updateSuggestedDate() {
+            let latest = null;
+
+            for (const option of taskSelect.options) {
+                if (option.selected && option.dataset.dueDate) {
+                    const date = new Date(option.dataset.dueDate);
+                    if (!latest || date > latest) {
+                        latest = date;
+                    }
+                }
+            }
+
+            if (latest) {
+                // Format YYYY-MM-DD
+                const iso = latest.toISOString().split("T")[0];
+                dateInput.value = iso;
+            }
+        }
+
+        // Watch for change events
+        taskSelect.addEventListener("change", updateSuggestedDate);
+
+        // Run once on load (for edit view)
+        updateSuggestedDate();
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Create/ Edit Task{% endblock %}
+{% block content %}
+<h1>Create/ Edit Task</h1>
+<form method="POST">
+    {% csrf_token %}
+    {% if form.errors %}
+        <ul class="error-list">
+            {% for field, errors in form.errors.items %}
+                <li>{{ field }}: {{ errors|join:", " }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <!-- Manually render the fields you need: instead of {{ form.as_p }}-->
+    <div>
+        <label for="id_project">Project:</label>
+        <p><a href="{% url 'project_detail' project.id %}">{{ project.title }}</a></p>
+    </div>
+    <div>
+        <label for="id_title">Title:</label>
+        {{ form.title }}
+    </div>
+    <div>
+        <label for="id_description">Description:</label>
+        {{ form.description }}
+    </div>
+    <div>
+        <label for="id_start_date">Start Date:</label>
+        {{ form.start_date }}
+    </div>
+    <div>
+        <label for="id_due_date">Due Date:</label>
+        {{ form.due_date }}
+        <p><strong>Warning: </strong>If the due date equals start date, the user needs to open the picker and confirm the due date by choosing it.</p>
+    </div>
+    <div>
+        <label for="id_priority">Priority:</label>
+        {{ form.priority }}
+    </div>
+    
+    <div>
+        <label for="id_status">Status:</label>
+        {{ form.status }}
+    </div>
+
+    <div>
+        <label for="id_milestone">Milestone:</label>
+        {{ form.milestone }}
+        <p class="helptext">Assign this task to a specific milestone (optional).</p>
+    </div>
+    
+    <div>
+        <label for="id_tags">Tags (Select or Deselect to Add or Remove):</label>
+        {{ form.tags }}  <!-- The existing tags checkbox field -->
+    </div>
+    
+    <!-- Render the new tags field for adding comma-separated new tags -->
+    <div>
+        <label for="id_new_tags">Add New Tags:</label>
+        {{ form.new_tags }}
+    </div>
+
+    <div>
+        <label for="id_prerequisite_tasks">Prerequisite Tasks (Select Multiple):</label>
+        {{ form.prerequisite_tasks }}
+        <p>This field supports multiple selections (hold <b>Ctrl</b> on Windows/Linux or <b>Cmd</b> on Mac).</p>
+        <p><strong>Finish-to-Start Rule enforced:</strong> The start date of this task must be on or after the latest due date of all selected prerequisite tasks.</p>        
+    </div>
+
+    <button type="submit" {% if not can_add_task and not can_change_task %}disabled{% endif %}>Save</button>
+    <button 
+            type="button" 
+            class="cancel-button" 
+            onclick="window.location.href='{% url 'project_detail' pk=project.id %}'">
+            Cancel
+    </button>
+</form>
+{% if not can_add_task and not can_change_task %}
+    <p>Sorry, but a permission is required to create or edit a task.</p>
+{% endif %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const startInput = document.getElementById("id_start_date");
+    const dueInput = document.getElementById("id_due_date");
+    const form = dueInput.closest("form");
+
+    let tempMode = false;
+
+    startInput.addEventListener("change", function () {
+        if (!startInput.value) return;
+
+        // Set due date MONTH to match start date
+        dueInput.value = startInput.value;
+        dueInput.dataset.temp = "1";  
+        tempMode = true;
+    });
+
+    // When user focuses the due date field
+    dueInput.addEventListener("focus", function () {
+        if (tempMode) {
+            // If value equals start date, treat this as an explicit confirmation
+            if (dueInput.value === startInput.value) {
+                delete dueInput.dataset.temp;
+                tempMode = false;
+            }
+        }
+    });
+
+    // When user selects a real date
+    dueInput.addEventListener("change", function () {
+        if (dueInput.dataset.temp === "1") {
+            delete dueInput.dataset.temp;
+            tempMode = false;
+        }
+    });
+
+    // On submit: prevent sending fake date values
+    form.addEventListener("submit", function () {
+        if (dueInput.dataset.temp === "1") {
+            dueInput.value = "";  // do NOT submit
+            delete dueInput.dataset.temp;
+        }
+    });
+});
+</script>
+{% endblock %}

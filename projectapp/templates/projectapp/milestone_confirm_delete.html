@@ -1,0 +1,14 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Delete Milestone{% endblock %}
+
+{% block content %}
+    <h1>Delete Task</h1>
+    <p>Are you sure you want to delete "{{ milestone.name }}"?</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Confirm Delete</button>
+        <button type="button" onclick="location.href='{% url 'project_detail' pk=milestone.project.id %}';">Cancel</button>
+    </form>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Tasks Filtered by {{ tag.name }}{% endblock %}
+
+{% block content %}
+<h3>Tasks for Tag: {{ tag.name }}</h3>
+
+<ul>
+    {% for task in tasks %}
+    <li>
+        <div class="{% if task.overdue %}overdue-task{% endif %}">
+        <a href="{% url 'task_detail' task.id %}" target="_blank">{{ task.title }}</a> - {{ task.get_priority_display }} - {{ task.status }} - Due: {{ task.due_date }}
+        <p>Description: {{ task.description }}</p>
+        </div>
+    </li>
+    {% endfor %}
+</ul>
+
+<button onclick="window.location.href='{% url 'project_detail' project.id %}'">← Back to Project</button>
+
+{% endblock %}

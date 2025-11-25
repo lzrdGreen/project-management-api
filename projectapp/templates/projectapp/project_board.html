@@ -1,0 +1,229 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Project Board View{% endblock %}
+{% block content %}
+<h1>{{ project.title }} - Board View</h1>
+
+<!-- Progress Bar -->
+<div class="progress-bar-container">
+    <div class="progress-bar" style="width: {{ project.progress }}%;"></div>
+</div>
+<p>Progress: {{ project.progress }}%</p>
+
+<p>Project Description: {{ project.description }}</p>
+
+<hr style="border-top: 2px solid #2166ac;">
+<!-- --------------------------------------- -->
+<!-- MILESTONES SECTION -->
+<!-- --------------------------------------- -->
+<h2>Project Milestones</h2>
+
+<!-- Add Milestone Button (Requires 'can_add_milestone' in context) -->
+<button 
+    onclick="window.location.href='{% url 'milestone_create' project.id %}'" 
+    {% if not can_add_milestone %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
+    Add New Milestone
+</button>
+{% if not can_add_milestone %}
+    <p class="small-text">You need permission to add a milestone.</p>
+{% endif %}
+
+<div class="milestone-list">
+    {% for milestone in project.milestones.all %}
+    <div class="milestone-card {% if milestone.is_complete %}completed{% else %}pending{% endif %}">
+        
+        <div class="milestone-status">
+            {% if milestone.is_complete %}
+                <span style="color: #276419; font-weight: bold;"> Completed</span>
+            {% else %}
+                <span style="color: orange; font-weight: bold;">... Pending</span>
+            {% endif %}
+        </div>
+        
+        
+        <a href="{% url 'milestone_detail' pk=milestone.id %}" title="Click to view Details">
+            <h3>{{ milestone.name }}</h3>
+        </a>
+        
+        
+        <p>Target Date: <b>{{ milestone.due_date|default:"(Not Set)" }}</b></p>
+        
+        {% with task_count=milestone.tasks.count %}
+            <p>
+                <small>
+                    Related Tasks: {{ task_count }}
+                    {% if task_count > 0 %}
+                        <span onclick="toggleTasks('{{ milestone.id }}')" 
+                            style="cursor:pointer; color:#2166ac;">
+                            (show)
+                        </span>
+                    {% endif %}
+                </small>
+            </p>
+
+            <ul id="milestone-tasks-{{ milestone.id }}" 
+                class="milestone-task-list" 
+                style="display:none; margin-top:0;">
+                {% for t in milestone.tasks.all %}
+                <li>
+                    <a href="{% url 'task_detail' t.id %}">
+                        {{ t.title }}
+                    </a>
+                    <small>(Due: {{ t.due_date|date:"M d, Y" }})</small>
+                </li>
+                {% endfor %}
+            </ul>
+        {% endwith %}
+        
+    </div>
+    {% empty %}
+        <p>No milestones defined for this project yet. Start by adding one above!</p>
+    {% endfor %}
+</div>
+<hr style="border-top: 2px solid #2166ac;">
+
+<!-- Button to switch to List View -->
+<button onclick="window.location.href='{% url 'project_detail' project.id %}'">Switch to Project's List View</button>
+
+<!-- Button to move task -->
+{% if can_edit %}
+    <button onclick="showMoveTaskControls()">Move Task to Another Column</button>
+{% else %}
+    <button disabled style="opacity: 0.85; cursor: not-allowed;">Move Task to Another Column</button>
+{% endif %}
+<!-- Task Move Controls -->
+<div id="task-move-controls" style="display: none; margin-top: 20px;" {% if not can_edit %}hidden{% endif %}>
+    <h3>Move Task: <span id="selected-task-name"></span></h3>
+    <p>Choose the new status:</p>
+    <label><input type="radio" name="status" value="todo"> To Do</label><br>
+    <label><input type="radio" name="status" value="in_progress"> In Progress</label><br>
+    <label><input type="radio" name="status" value="done"> Done</label><br><br>
+    <button onclick="moveTask()">Confirm Move</button>
+    <button onclick="cancelMoveTask()">Cancel</button>
+</div>
+
+<!-- Board View with columns for task statuses -->
+<div class="kanban-board" style="display: flex; justify-content: space-between; gap: 10px;">
+    <!-- In To Do Column -->
+    <div class="column todo" style="background-color: #a6d96a; border: solid 3px black; padding: 10px; flex: 1;">
+        <h2>To Do</h2>
+        {% for task in tasks.todo %}
+            <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
+            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
+            <p>{{ task.title }}</p>
+            <p>Priority: {{ task.get_priority_display }}</p>
+            <p>Due: {{ task.due_date }}</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- In Progress Column -->
+    <div class="column in-progress" style="background-color: #ffffbf; border: solid 3px black; padding: 10px; flex: 1;">
+        <h2>In Progress</h2>
+        {% for task in tasks.in_progress %}
+            <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
+            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
+            <p>{{ task.title }}</p>
+            <p>Priority: {{ task.get_priority_display }}</p>
+            <p>Due: {{ task.due_date }}</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Done Column -->
+    <div class="column done" style="background-color: #fee08b; border: solid 3px black; padding: 10px; flex: 1;">
+        <h2>Done</h2>
+        {% for task in tasks.done %}
+        <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
+            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
+            <p>{{ task.title }}</p>
+            <p>Priority: {{ task.get_priority_display }}</p>
+            <p>Due: {{ task.due_date }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    
+</div>
+
+<script>
+    let selectedTaskId = null;
+
+    function showMoveTaskControls() {        
+        const moveControls = document.getElementById('task-move-controls');
+        moveControls.style.display = 'block';
+        
+        // Add a hint to select a task
+        alert("Now, select a task to move:\n\n • First, click OK here,\n • Then click the task card,\n • Check that the Task Move Control shows the correct task,\n • Click Confirm Move (or Cancel)");
+
+
+        // Change onclick handler for all task cards to enable task selection
+        document.querySelectorAll('.task-card').forEach(function(card) {
+            card.onclick = function() {
+                selectTask(card.id.replace('task-', ''), card.querySelector('p').innerText);
+            };
+        });
+    }
+
+    function cancelMoveTask() {
+        // Reset onclick handlers to open task details again
+        document.querySelectorAll('.task-card').forEach(function(card) {
+            card.onclick = function() {
+                openTaskDetails(card.id.replace('task-', ''));
+            };
+        });
+        
+        document.getElementById('task-move-controls').style.display = 'none';
+    }
+
+
+    function selectTask(taskId, taskName) {
+        selectedTaskId = taskId;
+        document.getElementById('selected-task-name').innerText = taskName;
+        document.getElementById('task-move-controls').style.display = 'block';
+    }
+
+    function moveTask() {
+        if (!selectedTaskId) {
+            alert("Please select a task to move.");
+            return;
+        }
+        
+        const selectedStatus = document.querySelector('input[name="status"]:checked');
+        if (!selectedStatus) {
+            alert("Please choose a status.");
+            return;
+        }
+
+        const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+        fetch(`{% url 'task_move' %}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken, // Use the dynamically retrieved token
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                task_id: selectedTaskId,
+                status: selectedStatus.value
+            })
+        }).then(response => {
+            if (response.ok) {
+                location.reload();  // Refresh the page to reflect the changes
+            } else {
+                alert("Failed to move the task.");
+            }
+        });
+    }
+
+    function openTaskDetails(taskId) {
+        const url = "{% url 'task_detail' 0 %}".replace('/0/', '/' + taskId + '/');
+        window.open(url, '_blank');
+    }
+
+    function toggleTasks(id) {
+        const element = document.getElementById("milestone-tasks-" + id);
+        element.style.display = (element.style.display === "none") ? "block" : "none";
+    }
+
+</script>
+{% endblock %}

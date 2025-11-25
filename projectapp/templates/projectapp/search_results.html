@@ -1,0 +1,43 @@
+{% extends 'projectapp/base.html' %}
+{% load highlight_tags %}
+
+
+{% block title %}Search Results{% endblock %}
+
+{% block content %}
+<h1>Search Results</h1>
+
+{% if query %}
+    <p>Your query was: "{{ query }}"</p>
+{% endif %}
+
+<!-- Projects Results Section -->
+<h2>Project Results</h2>
+{% if project_results %}
+<ul>
+    {% for project in project_results %}
+    <li>
+        <h3><a href="{% url 'project_detail' project.id %}">{{ project.title|highlight:query }}</a></h3>
+        <p>{{ project.description|highlight:query }}</p>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+    <p>No projects found matching your search query.</p>
+{% endif %}
+
+<!-- Tasks Results Section -->
+<h2>Task Results</h2>
+{% if task_results %}
+<ul>
+    {% for task in task_results %}
+    <li>
+        <h3><a href="{% url 'task_detail' task.id %}">{{ task.title|highlight:query }}</a></h3>
+        <p>{{ task.description|highlight:query }}</p>       
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+    <p>No tasks found matching your search query.</p>
+{% endif %}
+{% endblock %}

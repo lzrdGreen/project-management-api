@@ -1,0 +1,265 @@
+[
+{
+  "model": "projectapp.project",
+  "pk": 1,
+  "fields": {
+    "title": "Sauce & Spoon Tablet Rollout (Pilot Project)",
+    "description": "The Sauce & Spoon Tablet Rollout Pilot Project aims to pilot tabletop menu tablets in the bar areas of its North and Downtown locations. The tablets will allow customers to place orders and pay directly, reducing wait times, increasing table turnover, and creating opportunities for upselling menu items. The project seeks to improve the customer dining experience, boost profitability by reducing food waste and increasing order size, and gather operational data to inform a full rollout. The successful pilot will support the company's long-term goals for growth and customer satisfaction.",
+    "created_at": "2025-11-23T10:05:02.713Z",
+    "updated_at": "2025-11-23T10:05:02.713Z"
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 1,
+  "fields": {
+    "name": "Planning",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 2,
+  "fields": {
+    "name": "Documentation",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 4,
+  "fields": {
+    "name": "Team",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 5,
+  "fields": {
+    "name": "Resources",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 6,
+  "fields": {
+    "name": "Initiation",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 7,
+  "fields": {
+    "name": "Governance",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 8,
+  "fields": {
+    "name": "Finance",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 10,
+  "fields": {
+    "name": "Communication",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 12,
+  "fields": {
+    "name": "Vendor",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 14,
+  "fields": {
+    "name": "Hardware",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 15,
+  "fields": {
+    "name": "Technical",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 16,
+  "fields": {
+    "name": "POS",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 17,
+  "fields": {
+    "name": "System",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 18,
+  "fields": {
+    "name": "Infrastructure",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 20,
+  "fields": {
+    "name": "Design",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 21,
+  "fields": {
+    "name": "Menu",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 25,
+  "fields": {
+    "name": "Marketing",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 26,
+  "fields": {
+    "name": "Security",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 27,
+  "fields": {
+    "name": "Testing",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 29,
+  "fields": {
+    "name": "Customer",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 30,
+  "fields": {
+    "name": "Training",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 31,
+  "fields": {
+    "name": "Launch",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 32,
+  "fields": {
+    "name": "Monitoring",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 33,
+  "fields": {
+    "name": "Data",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 35,
+  "fields": {
+    "name": "Analysis",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.tag",
+  "pk": 36,
+  "fields": {
+    "name": "Reporting",
+    "project": 1
+  }
+},
+{
+  "model": "projectapp.task",
+  "pk": 1,
+  "fields": {
+    "project": 1,
+    "title": "Finalise and Approve Project Charter",
+    "description": "Review and finalize the Project Charter document. The Charter confirms the project's scope, objectives, stakeholders, initial budget summary, and high-level schedule. The final step is obtaining formal, documented approval signatures from the Project Sponsor and the Project Manager. This approval signals the official initiation of the project and authorizes the Project Manager to proceed with detailed planning (Phase 1, Task 3: Develop Detailed Project Management Plan).",
+    "start_date": "2026-04-06",
+    "due_date": "2026-04-06",
+    "priority": 3,
+    "status": "in_progress",
+    "created_at": "2025-11-23T10:10:37.157Z",
+    "updated_at": "2025-11-24T14:16:54.623Z",
+    "milestone": 1,
+    "prerequisite_tasks": [],
+    "tags": [
+      2,
+      7,
+      6,
+      1
+    ]
+  }
+},
+{
+  "model": "projectapp.task",
+  "pk": 2,
+  "fields": {
+    "project": 1,
+    "title": "Assemble & Assign Project Team Roles",
+    "description": "Identify the individuals who will fill the key project roles (e.g., Project Manager, General Managers (GMs) for North and Downtown locations, IT/Technical Lead, Procurement Lead, Marketing). Confirm their availability and formally assign their responsibilities, ensuring all internal team members understand their roles and commitment levels for the project duration.",
+    "start_date": "2026-04-06",
+    "due_date": "2026-04-06",
+    "priority": 3,
+    "status": "in_progress",
+    "created_at": "2025-11-23T10:14:34.861Z",
+    "updated_at": "2025-11-24T14:17:14.129Z",
+    "milestone": 1,
+    "prerequisite_tasks": [],
+    "tags": [
+      6,
+      1,
+      5,
+      4
+    ]
+  }
+}

@@ -1,0 +1,279 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Project Details{% endblock %}
+
+{% block content %}
+<h1>{{ project.title }}</h1>
+<p><strong>Project Description: </strong> {{ project.description }}</p>
+
+<!-- Display Messages -->
+{% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+            <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+<!-- Button to toggle to board view -->
+<button onclick="window.location.href='{% url 'project_board' project.id %}'">Switch to Board View</button>
+<p></p>
+<!-- Progress Bar -->
+<div class="progress-bar-container">
+    <div class="progress-bar" style="width: {{ project.progress }}%;"></div>
+</div>
+<p>Progress: {{ project.progress }}%</p>
+<div class="progress-info">
+    <h4>How Progress Is Calculated</h4>
+    <ul>
+        <li><strong>Weighted Milestone Rule (90/10 Split):</strong>
+            When milestones are defined, 90% of the project’s progress comes from milestone completion, 
+            and 10% comes from tasks not linked to any milestone (“stray tasks”).
+        </li>
+
+        <li><strong>Milestone Completion is Binary:</strong>
+            A milestone is only considered complete when <em>all</em> of its tasks are marked as “Done”. 
+            Because of this, progress may stay flat and then suddenly jump when a milestone is finished.
+        </li>
+
+        <li><strong>Fallback Logic (No Milestones):</strong>
+            If the project has no milestones, progress is based entirely on the 
+            percentage of all tasks marked as “Done”.
+        </li>
+    </ul>
+    <p><strong>Note:</strong> This simplified model is intended for high-level tracking. For detailed analytics (e.g., burn-down charts or critical path views), consider using additional tools.</p>
+</div>
+
+<hr style="border-top: 2px solid #2166ac;">
+<!-- --------------------------------------- -->
+<!-- MILESTONES SECTION -->
+<!-- --------------------------------------- -->
+<h2>Project Milestones</h2>
+
+<!-- Add Milestone Button (Requires 'can_add_milestone' in context) -->
+<button 
+    onclick="window.location.href='{% url 'milestone_create' project.id %}'" 
+    {% if not can_add_milestone %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
+    Add New Milestone
+</button>
+{% if not can_add_milestone %}
+    <p class="small-text">You need permission to add a milestone.</p>
+{% endif %}
+
+<div class="milestone-list">
+    {% for milestone in project.milestones.all %}
+    <div class="milestone-card {% if milestone.is_complete %}completed{% else %}pending{% endif %}">
+        
+        <div class="milestone-status">
+            {% if milestone.is_complete %}
+                <span style="color: #276419; font-weight: bold;"> Completed</span>
+            {% else %}
+                <span style="color: orange; font-weight: bold;">... Pending</span>
+            {% endif %}
+        </div>
+        
+        <a href="{% url 'milestone_detail' pk=milestone.id %}" title="Click to view Details">
+            <h3>{{ milestone.name }}</h3>
+        </a>
+        
+        <p>Target Date: <b>{{ milestone.due_date|default:"(Not Set)" }}</b></p>
+        
+        {% with task_count=milestone.tasks.count %}
+            <p>
+                <small>
+                    Related Tasks: {{ task_count }}
+                    {% if task_count > 0 %}
+                        <span onclick="toggleTasks('{{ milestone.id }}')" 
+                            style="cursor:pointer; color:#2166ac;">
+                            (show)
+                        </span>
+                    {% endif %}
+                </small>
+            </p>
+
+            <ul id="milestone-tasks-{{ milestone.id }}" 
+                class="milestone-task-list" 
+                style="display:none; margin-top:0;">
+                {% for t in milestone.tasks.all %}
+                <li>
+                    <a href="{% url 'task_detail' t.id %}">
+                        {{ t.title }}
+                    </a>
+                    <small>(Due: {{ t.due_date|date:"M d, Y" }})</small>
+                </li>
+                {% endfor %}
+            </ul>
+        {% endwith %}
+        
+    </div>
+    {% empty %}
+        <p>No milestones defined for this project yet. Start by adding one above!</p>
+    {% endfor %}
+</div>
+<hr style="border-top: 2px solid #2166ac;">
+<!-- Add Task Button -->
+<button 
+    onclick="window.location.href='{% url 'task_create' project.id %}'" 
+    {% if not can_add_task %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
+    Add Task
+</button>
+
+<!-- Edit Project Button -->
+<button 
+    onclick="window.location.href='{% url 'project_edit' project.id %}'" 
+    {% if not can_change_project %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
+    Edit Project
+</button>
+
+<!-- Delete Project Button with Confirmation -->
+<button 
+    onclick="confirmDeleteProject('{{ project.id }}')" 
+    {% if not can_delete_project %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
+    Delete Project
+</button>
+
+
+<!-- Display tags as a list -->
+<h3>Filter Tasks by Tags:</h3>
+<p>(Opens in a new window)</p>
+<ul>
+    {% for tag in project.tags.all %}
+    <li>
+        <a href="{% url 'tasks_by_tag' project.id tag.id %}" target="_blank">{{ tag.name }}</a>
+    </li>
+    {% empty %}
+        <li>No tags assigned.</li>
+    {% endfor %}
+</ul>
+
+
+<h2>Tasks</h2>
+<!-- Sorting options for tasks -->
+<div>
+    <form method="get" style="display: inline;">
+        <button type="submit" name="sort" value="due_date">Sort by Due Date</button>
+    </form>
+    <form method="get" style="display: inline;">
+        <button type="submit" name="sort" value="priority">Sort by Priority</button>
+    </form>
+    <form method="get" style="display: inline;">
+        <button type="submit" name="sort" value="title">Sort by Title</button>
+    </form>
+</div>
+
+<ul>
+    {% for task in tasks %}
+    <li>
+        <div class="{% if task.overdue %}overdue-task{% endif %}">
+            <a href="{% url 'task_detail' task.id %}" target="_blank">
+                <b>{{ task.title }}</b>
+            </a> 
+            - {{ task.get_priority_display }} 
+            - {{ task.status }} 
+            - Starts: <b>{{ task.start_date|default:"(Not Set)" }}</b> 
+            - Due: <b>{{ task.due_date }}</b>
+
+            {% comment %} 
+                Display the associated Milestone next to the task details. 
+            {% endcomment %}
+            {% if task.milestone %}
+                <span class="milestone-info">
+                    (Milestone: 
+                    <a href="{% url 'milestone_detail' pk=task.milestone.id %}" title="View Milestone Details">
+                        {{ task.milestone.name }}
+                    </a>)
+                </span>
+            {% else %}
+                 <span class="milestone-info">(No Milestone)</span>
+            {% endif %}
+
+            {% with prereqs=task.prerequisite_tasks.all %}
+            {% if prereqs %}
+                <span class="dependency-info">
+                    (Requires:
+                    {% for prereq in prereqs %}
+                        <a href="{% url 'task_detail' prereq.id %}" title="Prerequisite Due: {{ prereq.due_date|date:'M d, Y' }}">
+                            {{ prereq.title }}
+                        </a>
+                        {% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                    | Latest Finish: <b>
+                        {# Find the max due date among prerequisites for display #}
+                        {% with max_due=prereqs|dictsort:"due_date"|last %}
+                            {{ max_due.due_date|date:"M d, Y" }}
+                        {% endwith %}
+                    </b>)
+                </span>
+            {% endif %}
+            {% endwith %}
+        </div>
+        
+        <p>Description: {{ task.description }}</p>
+        
+        <button 
+            onclick="window.location.href='{% url 'task_edit' task.id %}'" 
+            {% if not can_change_task %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
+            Edit
+        </button>
+
+        <button 
+            onclick="confirmDeleteTask('{{ task.id }}')" 
+            {% if not can_delete_task %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
+            Delete
+        </button>
+
+        <form id="deleteTaskForm-{{ task.id }}" action="{% url 'task_delete' task.id %}" method="POST" style="display:none;">
+            {% csrf_token %}
+        </form>
+    </li>
+    {% endfor %}
+</ul>
+
+<!-- Add Task Button -->
+<button 
+    onclick="window.location.href='{% url 'task_create' project.id %}'" 
+    {% if not can_add_task %}disabled style="opacity: 0.85; cursor: not-allowed;"{% endif %}>
+    Add Task
+</button>
+
+<!-- Edit Project Button -->
+<button 
+    onclick="window.location.href='{% url 'project_edit' project.id %}'" 
+    {% if not can_change_project %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
+    Edit Project
+</button>
+
+<!-- Delete Project Button with Confirmation -->
+<button 
+    onclick="confirmDeleteProject('{{ project.id }}')" 
+    {% if not can_delete_project %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
+    Delete Project
+</button>
+
+<!-- Inline form for project deletion -->
+<form id="deleteProjectForm-{{ project.id }}" action="{% url 'project_delete' project.id %}" method="POST" style="display:none;">
+    {% csrf_token %}
+</form>
+
+<script>
+    // JavaScript confirmation for deleting tasks
+    function confirmDeleteTask(taskId) {
+        if (confirm("Are you sure you want to delete this task?")) {
+            document.getElementById(`deleteTaskForm-${taskId}`).submit();
+        }
+    }
+
+    // JavaScript confirmation for deleting projects
+    function confirmDeleteProject(projectId) {
+        if (confirm("Are you sure you want to delete this project?")) {
+            document.getElementById(`deleteProjectForm-${projectId}`).submit();
+        }
+    }
+
+    function toggleTasks(id) {
+        const element = document.getElementById("milestone-tasks-" + id);
+        element.style.display = (element.style.display === "none") ? "block" : "none";
+    }
+</script>
+
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends 'projectapp/base.html' %}
+
+{% block title %}Create Project{% endblock %}
+{% block content %}
+<h1>Create/ Edit Project</h1>
+<form method="POST">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" {% if not can_add_project and not can_change_project %}disabled{% endif %}>Save</button>
+</form>
+{% if not can_add_project and not can_change_project %}
+    <p>Sorry, but a permission is required to create a project.</p>
+{% endif %}
+{% endblock %}

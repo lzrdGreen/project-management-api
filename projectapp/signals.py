@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User, Group
-from django.db.models.signals import post_save, post_delete, m2m_changed
+from django.db.models.signals import pre_save, post_save, post_delete, m2m_changed
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError
 
@@ -70,5 +70,62 @@ def update_milestone_on_task_delete(sender, instance, **kwargs):
         try:
             ms = Milestone.objects.get(pk=instance.milestone_id)
             ms.recalculate_and_save_date()
+        except Milestone.DoesNotExist:
+            pass
+
+# ---------------------------------------------------------
+# Capture old milestone before saving (pre_save)
+# ---------------------------------------------------------
+@receiver(pre_save, sender=Task)
+def capture_old_milestone(sender, instance, **kwargs):
+    """Store the old milestone ID so post_save can compare."""
+    if not instance.pk:
+        instance._old_milestone_id = None
+        return
+    
+    try:
+        old_task = Task.objects.get(pk=instance.pk)
+        instance._old_milestone_id = old_task.milestone_id
+    except Task.DoesNotExist:
+        instance._old_milestone_id = None
+
+
+# ---------------------------------------------------------
+# Update milestone(s) after task save (post_save)
+# ---------------------------------------------------------
+@receiver(post_save, sender=Task)
+def update_milestones_on_task_save(sender, instance, created, **kwargs):
+    """
+    Recalculate milestone dates when:
+      - A task is created inside a milestone
+      - A task moves from one milestone to another
+      - A task is removed from a milestone
+    """
+    old_ms_id = getattr(instance, "_old_milestone_id", None)
+    new_ms_id = instance.milestone_id
+
+    # NEW TASK
+    if created:
+        if new_ms_id:
+            try:
+                ms = Milestone.objects.get(pk=new_ms_id)
+                ms.recalculate_and_save_date()
+            except Milestone.DoesNotExist:
+                pass
+        return
+
+    # TASK MOVED TO A NEW MILESTONE
+    if new_ms_id and new_ms_id != old_ms_id:
+        try:
+            new_ms = Milestone.objects.get(pk=new_ms_id)
+            new_ms.recalculate_and_save_date()
+        except Milestone.DoesNotExist:
+            pass
+
+    # TASK REMOVED FROM OLD MILESTONE
+    if old_ms_id and old_ms_id != new_ms_id:
+        try:
+            old_ms = Milestone.objects.get(pk=old_ms_id)
+            old_ms.recalculate_and_save_date()
         except Milestone.DoesNotExist:
             pass

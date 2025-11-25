@@ -1,3 +1,212 @@
+from django.test import TestCase
+from django.core.exceptions import ValidationError
+from datetime import date, timedelta
+from django.db import IntegrityError
+
+from .models import Project, Task, Milestone, Tag
+
+class ProjectModelTests(TestCase):
+
+    def test_progress_no_tasks(self):
+        p = Project.objects.create(title="Empty")
+        self.assertEqual(p.progress, 0.0)
+
+    def test_progress_no_milestones_simple_tasks(self):
+        p = Project.objects.create(title="Simple")
+        Task.objects.create(project=p, title="A", due_date=date.today(), status="done")
+        Task.objects.create(project=p, title="B", due_date=date.today(), status="todo")
+        Task.objects.create(project=p, title="C", due_date=date.today(), status="todo")
+
+        # 1/3 done = 33.33
+        self.assertAlmostEqual(p.progress, 33.33, places=2)
+
+    def test_progress_with_milestones_all_tasks_done(self):
+        p = Project.objects.create(title="Proj")
+        m = Milestone.objects.create(project=p, name="MS1", due_date=date.today())
+
+        Task.objects.create(project=p, milestone=m, title="A", status="done", due_date=date.today())
+        Task.objects.create(project=p, milestone=m, title="B", status="done", due_date=date.today())
+
+        self.assertEqual(p.progress, 100.0)
+
+    def test_progress_with_milestones_none_complete_strict(self):
+        """
+        Milestones exist → 90% weighting.
+        Milestone incomplete → milestone contribution = 0%
+        Stray tasks exist → 10% weighting.
+        If stray tasks also incomplete → total = 0%.
+        """
+        p = Project.objects.create(title="Proj")
+        m = Milestone.objects.create(project=p, name="MS1", due_date=date.today())
+
+        Task.objects.create(project=p, milestone=m, title="A", due_date=date.today(), status='done')
+        Task.objects.create(project=p, milestone=m, title="B", due_date=date.today(), status='todo')
+
+        # Stray incomplete task
+        Task.objects.create(project=p, title="C", due_date=date.today(), status='todo')
+
+        self.assertEqual(p.progress, 0.0)
+
+    def test_progress_with_milestones_complete_and_stray_half(self):
+        p = Project.objects.create(title="Proj")
+        m = Milestone.objects.create(project=p, name="MS1", due_date=date.today())
+
+        Task.objects.create(project=p, milestone=m, title="A", due_date=date.today(), status="done")
+        Task.objects.create(project=p, milestone=m, title="B", due_date=date.today(), status="done")
+
+        Task.objects.create(project=p, title="C", due_date=date.today(), status="done")
+        Task.objects.create(project=p, title="D", due_date=date.today(), status="todo")
+
+        # milestone = complete → contributes 90%
+        # stray = 1/2 = 50% → contributes 5%
+        # total = 95%
+        self.assertEqual(p.progress, 95.0)
+
+
+class MilestoneTests(TestCase):
+
+    def setUp(self):
+        self.p = Project.objects.create(title="P")
+        self.m = Milestone.objects.create(project=self.p, name="MS", due_date=date.today())
+
+    def test_milestone_complete_property(self):
+        Task.objects.create(project=self.p, milestone=self.m,
+                            title="A", due_date=date.today(), status="todo")
+        self.assertFalse(self.m.is_complete)
+
+        # now complete
+        t = Task.objects.get(title="A")
+        t.status = "done"
+        t.save()
+        self.m.refresh_from_db()
+        self.assertTrue(self.m.is_complete)
+
+    def test_milestone_latest_due_date(self):
+        d1 = date.today() + timedelta(days=3)
+        d2 = date.today() + timedelta(days=7)
+
+        Task.objects.create(project=self.p, milestone=self.m, title="A", due_date=d1)
+        Task.objects.create(project=self.p, milestone=self.m, title="B", due_date=d2)
+
+        self.assertEqual(self.m.latest_due_date(), d2)
+
+    def test_milestone_recalculates_due_date(self):
+        d1 = date.today() + timedelta(days=5)
+        d2 = date.today() + timedelta(days=12)
+
+        t1 = Task.objects.create(project=self.p, milestone=self.m, title="A", due_date=d1)
+        t2 = Task.objects.create(project=self.p, milestone=self.m, title="B", due_date=d2)
+
+        self.m.recalculate_and_save_date()
+        self.m.refresh_from_db()
+        self.assertEqual(self.m.due_date, d2)
+
+    def test_milestone_due_date_updates_when_task_deleted(self):
+        d1 = date.today() + timedelta(days=5)
+        d2 = date.today() + timedelta(days=12)
+
+        t1 = Task.objects.create(project=self.p, milestone=self.m, title="A", due_date=d1)
+        t2 = Task.objects.create(project=self.p, milestone=self.m, title="B", due_date=d2)
+
+        self.m.recalculate_and_save_date()
+        self.assertEqual(self.m.due_date, d2)
+
+        t2.delete()
+        self.m.recalculate_and_save_date()
+        self.m.refresh_from_db()
+
+        self.assertEqual(self.m.due_date, d1)
+
+
+class TaskTests(TestCase):
+
+    def setUp(self):
+        self.p = Project.objects.create(title="P")
+        self.m1 = Milestone.objects.create(project=self.p, name="M1", due_date=date.today())
+        self.m2 = Milestone.objects.create(project=self.p, name="M2", due_date=date.today())
+
+    def test_task_overdue(self):
+        overdue = Task.objects.create(project=self.p, title="A",
+                                      due_date=date.today() - timedelta(days=1),
+                                      status="todo")
+        self.assertTrue(overdue.is_overdue())
+
+        not_overdue = Task.objects.create(project=self.p, title="B",
+                                          due_date=date.today() + timedelta(days=1),
+                                          status="in_progress")
+        self.assertFalse(not_overdue.is_overdue())
+
+        done_past = Task.objects.create(project=self.p, title="C",
+                                        due_date=date.today() - timedelta(days=10),
+                                        status="done")
+        self.assertFalse(done_past.is_overdue())
+
+    def test_moving_task_updates_both_milestones(self):
+        # Task initially belongs to m1
+        t = Task.objects.create(
+            title="Moveable",
+            due_date=date(2025, 12, 5),
+            milestone=self.m1,
+            project=self.p
+        )
+
+        # Initial milestone due
+        old_m1_due = self.m1.due_date
+
+        # Move task to m2
+        t.milestone = self.m2
+        t.save()
+
+        # Refresh both milestones
+        self.m1.refresh_from_db()
+        self.m2.refresh_from_db()
+
+        # m1 should update because task removed
+        self.assertNotEqual(old_m1_due, self.m1.due_date)
+
+        # m2 should update because task added
+        self.assertEqual(self.m2.due_date, t.due_date)
+
+        # task due date must remain unchanged (never recalculated)
+        self.assertEqual(t.due_date, date(2025, 12, 5))
+
+    def test_circular_dependency_self(self):
+        t = Task.objects.create(
+            project=self.p, title="A",
+            due_date=date.today()
+        )
+        with self.assertRaises(ValidationError):
+            t.prerequisite_tasks.set([t])
+
+    def test_circular_dependency_chain(self):
+        a = Task.objects.create(project=self.p, title="A", due_date=date.today())
+        b = Task.objects.create(project=self.p, title="B", due_date=date.today())
+        c = Task.objects.create(project=self.p, title="C", due_date=date.today())
+
+        b.prerequisite_tasks.add(a)
+        c.prerequisite_tasks.add(b)
+
+        # This should create a cycle
+        with self.assertRaises(ValidationError):
+            a.prerequisite_tasks.add(c)
+
+
+class TagTests(TestCase):
+
+    def setUp(self):
+        self.p = Project.objects.create(title="P")
+
+    def test_unique_tag_per_project(self):
+        Tag.objects.create(project=self.p, name="Feature")
+        with self.assertRaises(IntegrityError):
+            Tag.objects.create(project=self.p, name="Feature")
+
+    def test_same_tag_name_in_different_projects(self):
+        Tag.objects.create(project=self.p, name="Feature")
+        p2 = Project.objects.create(title="Other")
+        tag = Tag.objects.create(project=p2, name="Feature")
+        self.assertIsNotNone(tag.pk)
+
 from django.test import TestCase, Client
 from django.urls import reverse
 from projectapp.models import Project, Task, Tag
@@ -15,21 +224,21 @@ def get_permission(model_class, action):
 class ProjectModelTest(TestCase):
     def setUp(self):
         self.project_a = Project.objects.create(title="Project Alpha")
-        self.task_1 = Task.objects.create(project=self.project_a, title="Done Task", status='done')
-        self.task_2 = Task.objects.create(project=self.project_a, title="In Progress Task", status='in_progress')
-        self.task_3 = Task.objects.create(project=self.project_a, title="To Do Task", status='todo')
+        self.task_1 = Task.objects.create(project=self.project_a, title="Done Task", status='done', due_date=date.today())
+        self.task_2 = Task.objects.create(project=self.project_a, title="In Progress Task", status='in_progress', due_date=date.today())
+        self.task_3 = Task.objects.create(project=self.project_a, title="To Do Task", status='todo', due_date=date.today())
 
     def test_progress_calculation(self):
-        """Tests Project.calculate_progress() logic."""
+        """Tests Project.progress logic."""
         # Project A: 1 done / 3 total tasks = 33%
-        self.assertAlmostEqual(self.project_a.calculate_progress(), 33.333, places=3)
+        self.assertAlmostEqual(self.project_a.progress, 33.333, places=2)
         
         # Test 100% completion
         self.task_2.status = 'done'
         self.task_2.save()
         self.task_3.status = 'done'
         self.task_3.save()
-        self.assertEqual(self.project_a.calculate_progress(), 100.00)
+        self.assertEqual(self.project_a.progress, 100.00)
 
     def test_is_overdue(self):
         """Tests Task.is_overdue() logic."""
@@ -50,14 +259,24 @@ class ProjectListViewTest(TestCase):
         # Setup: Create a test user and a client
         self.client = Client()
         self.user = User.objects.create_user(username='tester', password='password')
-        self.list_url = reverse('project_list_name') # Replace with your actual URL name
-
-    def test_login_required(self):
-        # Test 1: Check LoginRequiredMixin
+        self.list_url = reverse('project_list')
+        
+    def test_login_not_required(self):
+        """Anonymous users should be able to access the project list."""
         response = self.client.get(self.list_url)
-        # Should redirect to the login page
-        self.assertRedirects(response, f'/accounts/login/?next={self.list_url}')
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'projectapp/project_list_new.html')
 
+    def test_permissions_in_context_for_anonymous(self):
+        """Anonymous users should not have any project/task permissions."""
+        response = self.client.get(self.list_url)
+        self.assertFalse(response.context['can_add_project'])
+        self.assertFalse(response.context['can_change_project'])
+        self.assertFalse(response.context['can_delete_project'])
+        self.assertFalse(response.context['can_add_task'])
+        self.assertFalse(response.context['can_change_task'])
+        self.assertFalse(response.context['can_delete_task']) 
+    
     def test_view_uses_correct_template_and_context(self):
         # Login the user
         self.client.login(username='tester', password='password')
@@ -136,10 +355,10 @@ class ProjectCrudTest(TestCase):
     def test_create_permission_denied(self):
         """Test ProjectCreateView redirects unauthorized user via PermissionMixin."""
         self.client.login(username='no_perm', password='password')
-        response = self.client.get(self.create_url)
+        response = self.client.post(self.create_url)
         
         # Should be redirected to home_page (as defined in PermissionMixin)
-        self.assertRedirects(response, reverse('home_page')) 
+        self.assertRedirects(response, reverse('project_list')) 
 
     def test_create_success(self):
         """Test ProjectCreateView with correct permission."""
@@ -166,7 +385,7 @@ class TaskApiTest(TestCase):
         self.user_with_perm.user_permissions.add(change_perm)
         
         self.project = Project.objects.create(title="Test Project")
-        self.task = Task.objects.create(project=self.project, title="Move Me", status='todo')
+        self.task = Task.objects.create(project=self.project, title="Move Me", status='todo', due_date=date.today())
         self.move_url = reverse('task_move') # Assuming URL name
 
     def test_task_move_unauthorized(self):

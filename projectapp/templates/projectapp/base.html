@@ -33,9 +33,9 @@
 
     <main>
         {% block content %}
-        <!-- This is where child templates will inject their content -->
-        
+        <!-- This is where child templates will inject their content -->        
         {% endblock content %}
+        
         {% if user.is_authenticated %}
         <form method="post" action="{% url 'logout' %}" style="text-align: right;">
             {% csrf_token %}

@@ -122,6 +122,12 @@ class TaskSerializer(serializers.ModelSerializer):
             start_date = start_date if start_date is not None else self.instance.start_date
             due_date = due_date if due_date is not None else self.instance.due_date
 
+        for prereq in prerequisites:
+            if prereq.project != project:
+                raise ValidationError({
+                    "prerequisite_tasks": "All prerequisite tasks must belong to the same project."
+                })
+        
         # Self-dependency check
         if self.instance and self.instance.pk and self.instance in prerequisites:
             raise ValidationError({
@@ -164,6 +170,10 @@ class TaskSerializer(serializers.ModelSerializer):
         new_tags_str = validated_data.pop('new_tags', '').strip()
 
         task = Task(**validated_data)
+        
+        # just in case:
+        task._old_milestone_id = None
+        task._original_milestone_id = None
 
         # AUTHORITATIVE VALIDATION
         task.full_clean()  # <-- this enforces Task.clean()
@@ -188,6 +198,25 @@ class TaskSerializer(serializers.ModelSerializer):
         tag_ids = validated_data.pop('tag_ids', [])
         prerequisite_tasks = validated_data.pop('prerequisite_tasks', [])
         new_tags_str = validated_data.pop('new_tags', '').strip()
+        
+        # This preserves the "old" milestone id for validation and for save() logic.
+        try:
+            # Use a fast DB hit to get the current milestone_id (or None)
+            old_milestone_id = Task.objects.filter(pk=instance.pk).values_list('milestone_id', flat=True).first()
+        except Exception:
+            old_milestone_id = getattr(instance, 'milestone_id', None)
+
+        # Attach both tracking attributes used by your model/save/signals.
+        # Only set them if they are not already present (safeguard).
+        if not hasattr(instance, '_old_milestone_id'):
+            instance._old_milestone_id = old_milestone_id
+        # _original_milestone_id is used inside Task.save() implementation
+        if not hasattr(instance, '_original_milestone_id'):
+            instance._original_milestone_id = old_milestone_id
+
+        # Assign fields (now safe: we have the old milestone stored)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
 
         # Assign fields
         for attr, value in validated_data.items():

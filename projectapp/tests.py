@@ -417,3 +417,131 @@ class TaskApiTest(TestCase):
         # Assert the status DID change
         self.task.refresh_from_db()
         self.assertEqual(self.task.status, 'in_progress')
+        
+# Project List View Integration Test
+class ProjectIntegrationTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alex", password="pass")
+        self.url = reverse("project_list")
+        self.p1 = Project.objects.create(title="A Project")
+        self.p2 = Project.objects.create(title="B Project")
+
+    def test_project_list_integration(self):
+        """URL → View → Template → DB"""
+        response = self.client.get(self.url)
+
+        # 1. Status code
+        self.assertEqual(response.status_code, 200)
+
+        # 2. Template
+        self.assertTemplateUsed(response, "projectapp/project_list_new.html")
+
+        # 3. DB objects visible
+        self.assertContains(response, "A Project")
+        self.assertContains(response, "B Project")
+
+        # 4. Context values exist
+        context = response.context
+        self.assertIn("project_results", context)
+        self.assertIn("can_add_project", context)
+
+# Project Detail Integration Test
+class ProjectDetailIntegrationTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alex", password="pass")
+        self.project = Project.objects.create(title="Project X")
+        Task.objects.create(title="Task 1", project=self.project, priority=1, due_date=date.today())
+        Task.objects.create(title="Task 2", project=self.project, priority=2, due_date=date.today())
+
+        self.url = reverse("project_detail", args=[self.project.pk])
+
+    def test_project_detail_integration(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "projectapp/project_detail.html")
+
+        # DB hit → Tasks appear
+        self.assertContains(response, "Task 1")
+        self.assertContains(response, "Task 2")
+
+        # context includes sorted tasks
+        self.assertIn("tasks", response.context)
+        self.assertIn("project_progress", response.context)
+
+# Task Create Integration Test
+
+class TaskCreateIntegrationTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alex", password="pass")
+        self.user.user_permissions.add(
+            Permission.objects.get(codename="add_task")
+        )
+        self.client.login(username="alex", password="pass")
+
+        self.project = Project.objects.create(title="Proj")
+        self.url = reverse("task_create", args=[self.project.pk])
+
+    def test_task_create_integration(self):
+        self.client.force_login(self.user)
+
+        url = reverse("task_create", kwargs={"project_id": self.project.id})
+
+        response = self.client.post(url, {
+            "title": "Test Task",
+            "description": "Some text",
+            "start_date": "2025-12-01",
+            "due_date": "2025-12-10",
+            "priority": 2,
+            "status": "todo",
+        })
+
+        # Form valid → must redirect
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("project_detail", kwargs={"pk": self.project.id}))
+
+        # Check creation
+        task = Task.objects.get(title="Test Task")
+        self.assertEqual(task.project, self.project)
+
+
+# Milestone Create Integration Test
+class MilestoneCreateIntegrationTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alex", password="pass")
+        self.user.user_permissions.add(
+            Permission.objects.get(codename="add_milestone")
+        )
+        self.client.login(username="alex", password="pass")
+
+        self.project = Project.objects.create(title="With Milestones")
+        self.url = reverse("milestone_create", args=[self.project.pk])
+
+    def test_milestone_create_integration(self):
+        self.client.force_login(self.user)
+
+        url = reverse("milestone_create", kwargs={"project_id": self.project.id})
+
+        response = self.client.post(url, {
+            "name": "Milestone A",
+            "description": "Milestone desc",
+            "due_date": "2025-12-20",
+            "milestone_type": "GATE",
+        })
+
+        if response.status_code == 200:
+            # This line will show you which fields failed validation and why.
+            print(response.context['form'].errors)
+                
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("project_detail", kwargs={"pk": self.project.id}))
+
+        milestone = Milestone.objects.get(name="Milestone A")
+        self.assertEqual(milestone.project, self.project)
+
+
+#

@@ -56,7 +56,7 @@ class Tag(models.Model):
     
     class Meta:
         unique_together = ('name', 'project')
-        ordering = ['name']
+        ordering = ['name'] 
     
     def __str__(self):
         return f"{self.name} on {self.project.title}"
@@ -112,22 +112,7 @@ class Task(models.Model):
         self._original_milestone_id = self.milestone_id
     
     def __str__(self):
-        prereqs = self.prerequisite_tasks.all()
-
-        if prereqs.exists():
-            latest_due = prereqs.aggregate(max_due=Max('due_date')).get('max_due')
-
-            if latest_due:
-                latest_str = latest_due.strftime('%Y-%m-%d')
-            else:
-                latest_str = "No date"  # Should never happen
-
-            return (
-                f"{self.title} (Due: {self.due_date}, "
-                f"Prereqs: {prereqs.count()}, Latest Due Date: {latest_str})"
-            )
-
-        return f"{self.title} (Due: {self.due_date}, No Prerequisites)"
+        return f"{self.title} (Due: {self.due_date})"
 
       
     def is_overdue(self):
@@ -160,6 +145,23 @@ class Task(models.Model):
         if self.milestone and self.milestone.project_id != self.project_id:
             raise ValidationError("The milestone must belong to the same project as the task.")
 
+        # Start <= due
+        if self.start_date and self.due_date and self.start_date > self.due_date:
+            raise ValidationError("Due date cannot be before the start date.")
+        
+        
+        # Skip M2M validation during creation (object has no PK yet)
+        if not self.pk:
+            return
+       
+        # FS dependency rule
+        if self.prerequisite_tasks.exists() and self.start_date:
+            latest_due = self.prerequisite_tasks.aggregate(Max("due_date"))["due_date__max"]
+            if latest_due and self.start_date < latest_due:
+                raise ValidationError({
+                    "start_date": f"Start date must be on or after {latest_due}."
+                })
+        
         # Circular dependency logic
         if self.pk:            
             for parent in self.prerequisite_tasks.all():

@@ -39,9 +39,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return ProjectSerializer
 
 class TaskViewSet(viewsets.ModelViewSet):
-    queryset = Task.objects.select_related('project', 'parent_task').prefetch_related('tags').all()
+    queryset = (
+        Task.objects
+        .select_related('project')                 
+        .prefetch_related('prerequisite_tasks')    
+        .prefetch_related('tags')
+        .all()
+    )
     serializer_class = TaskSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly,permissions.DjangoModelPermissions]
+    permission_classes = [
+        permissions.IsAuthenticatedOrReadOnly,
+        permissions.DjangoModelPermissions
+    ]
     
 class MilestoneViewSet(viewsets.ModelViewSet):
     queryset = Milestone.objects.select_related('project').prefetch_related('tasks').all()

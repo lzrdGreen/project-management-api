@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404
 from django.contrib import messages
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
@@ -94,7 +94,7 @@ class ProjectCreateView(CreateView):
     model = Project
     form_class = ProjectForm
     template_name = 'projectapp/project_form.html'
-    success_url = reverse_lazy('project_list')
+    #success_url = reverse_lazy('project_list')
     permission_required = 'projectapp.add_project'
     
     def dispatch(self, request, *args, **kwargs):
@@ -118,6 +118,13 @@ class ProjectCreateView(CreateView):
         })
         return context
 
+    def get_success_url(self):
+        """
+        Redirects to the detail view of the newly created Project instance.
+        self.object is automatically set by the CreateView upon successful save.
+        """
+        # We use the URL pattern 'project_detail' and pass the new object's primary key (pk)
+        return reverse('project_detail', kwargs={'pk': self.object.pk})
 
 class ProjectUpdateView(LoginRequiredMixin, PermissionMixin, UpdateView):
     model = Project
@@ -300,10 +307,14 @@ class TaskDetailView(DetailView):
         task = self.object
         task.overdue = task.is_overdue()
         u = self.request.user
+        
+        dependents_qs = task.dependents.all().select_related('project', 'milestone').order_by('due_date', '-priority')
+        
         context.update({
             'project': task.project,
             'can_edit_task': u.has_perm('projectapp.change_task'),
             'can_delete_task': u.has_perm('projectapp.delete_task'),
+            'dependents': dependents_qs,
         })
         return context
 

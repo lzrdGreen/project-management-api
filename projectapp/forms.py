@@ -8,7 +8,7 @@ from .models import Project, Task, Tag, Milestone
 class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
-        fields = ['title', 'description']
+        fields = ['title', 'description'] 
     
 class TagForm(forms.ModelForm):
     class Meta:
@@ -38,7 +38,7 @@ class TagForm(forms.ModelForm):
         if qs.exists():
             raise ValidationError(f"A tag named '{name}' already exists in this project.")
             
-        return name
+        return name 
     
     def save(self, commit=True):            
         tag_instance = super().save(commit=False)            
@@ -160,13 +160,25 @@ class TaskForm(forms.ModelForm):
     def save(self, commit=True):
         # Let Django handle instance creation and initial save
         task = super().save(commit=False)
-        if self.project and not task.project_id:
-            task.project = self.project
+        if not task.project_id:
+            task.project = self.cleaned_data.get("project")
+        #if self.project and not task.project_id:
+            #task.project = self.project
 
+        # Capture old milestone before save (for model.save and signals)
+        if task.pk:
+            old_milestone_id = Task.objects.filter(pk=task.pk).values_list("milestone_id", flat=True).first()
+        else:
+            old_milestone_id = None
+
+        task._old_milestone_id = old_milestone_id
+        task._original_milestone_id = old_milestone_id
+        
         # Only handle ManyToMany after commit (when PK exists)
         if commit:
             # Note: For creation, the M2M relations are applied after this save, 
             # meaning the model's clean() will only catch the cycle on the next save/update.
+            task.full_clean() ####
             task.save() 
             
             # --- prerequisite tasks ---

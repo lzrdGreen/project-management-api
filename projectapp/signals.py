@@ -78,9 +78,15 @@ def update_milestone_on_task_delete(sender, instance, **kwargs):
 # ---------------------------------------------------------
 @receiver(pre_save, sender=Task)
 def capture_old_milestone(sender, instance, **kwargs):
-    """Store the old milestone ID so post_save can compare."""
+    """Store the old milestone ID so post_save can compare.
+    If a higher layer (serializer) already set instance._old_milestone_id, leave it untouched.
+    """
     if not instance.pk:
         instance._old_milestone_id = None
+        return
+    
+    # If already present (e.g., serializer pre-captured), don't overwrite.
+    if hasattr(instance, "_old_milestone_id") and instance._old_milestone_id is not None:
         return
     
     try:

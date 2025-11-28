@@ -35,6 +35,23 @@
     {% endwith %}
 </p>
 
+<p>Dependent Tasks (=the tasks that are waiting on the current task):
+    {% if dependents and dependents.exists %}
+        <ul>
+        {% for child in dependents %}
+            <li>
+                <a href="{% url 'task_detail' child.id %}">{{ child.title }}</a>
+                (Due: {{ child.due_date }}{% if child.milestone %}, Milestone: <a href="{% url 'milestone_detail' child.milestone.id %}">{{ child.milestone.name }}</a>{% endif %})
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <b>None</b> (No tasks depend on this one.)
+    {% endif %}
+</p>
+
+
+
 <!-- Display warning if task is overdue -->
 {% if task.overdue %}
     <p class="overdue-warning">⚠️ This task is overdue!</p>

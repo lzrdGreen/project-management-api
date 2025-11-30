@@ -10,9 +10,72 @@
 </div>
 <p>Progress: {{ project.progress }}%</p>
 
-<p>Project Description: {{ project.description }}</p>
+<p><strong>Project Description:</strong> {{ project.description }}</p>
 
-<hr style="border-top: 2px solid #2166ac;">
+
+<!-- Button to switch to List View -->
+<button onclick="window.location.href='{% url 'project_detail' project.id %}'">Switch to Project's List View</button>
+
+<!-- Button to move task -->
+{% if can_edit %}
+    <button onclick="showMoveTaskControls()">Move Task to Another Column</button>
+{% else %}
+    <button disabled style="opacity: 0.85; cursor: not-allowed;">Move Task to Another Column</button>
+{% endif %}
+<!-- Task Move Controls -->
+<div id="task-move-controls" style="display: none; margin-top: 20px;" {% if not can_edit %}hidden{% endif %}>
+    <h3>Move Task: <span id="selected-task-name"></span></h3>
+    <p>Choose the new status:</p>
+    <label><input type="radio" name="status" value="todo"> To Do</label><br>
+    <label><input type="radio" name="status" value="in_progress"> In Progress</label><br>
+    <label><input type="radio" name="status" value="done"> Done</label><br><br>
+    <button onclick="moveTask()">Confirm Move</button>
+    <button onclick="cancelMoveTask()">Cancel</button>
+</div>
+
+<!-- Board View with columns for task statuses -->
+<div class="kanban-board" style="display: flex; justify-content: space-between; gap: 10px;">
+    <!-- In To Do Column -->
+    <div class="column todo" style="background-color: #a6d96a; border: solid 3px black; padding: 10px; flex: 1;">
+        <h2>To Do</h2>
+        {% for task in tasks.todo %}
+            <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
+            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
+            <p>{{ task.title }}</p>
+            <p>Priority: {{ task.get_priority_display }}</p>
+            <p>Due: {{ task.due_date }}</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- In Progress Column -->
+    <div class="column in-progress" style="background-color: #ffffbf; border: solid 3px black; padding: 10px; flex: 1;">
+        <h2>In Progress</h2>
+        {% for task in tasks.in_progress %}
+            <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
+            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
+            <p>{{ task.title }}</p>
+            <p>Priority: {{ task.get_priority_display }}</p>
+            <p>Due: {{ task.due_date }}</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Done Column -->
+    <div class="column done" style="background-color: #fee08b; border: solid 3px black; padding: 10px; flex: 1;">
+        <h2>Done</h2>
+        {% for task in tasks.done %}
+        <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
+            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
+            <p>{{ task.title }}</p>
+            <p>Priority: {{ task.get_priority_display }}</p>
+            <p>Due: {{ task.due_date }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    
+</div>
+
 <!-- --------------------------------------- -->
 <!-- MILESTONES SECTION -->
 <!-- --------------------------------------- -->
@@ -79,70 +142,6 @@
     {% empty %}
         <p>No milestones defined for this project yet. Start by adding one above!</p>
     {% endfor %}
-</div>
-<hr style="border-top: 2px solid #2166ac;">
-
-<!-- Button to switch to List View -->
-<button onclick="window.location.href='{% url 'project_detail' project.id %}'">Switch to Project's List View</button>
-
-<!-- Button to move task -->
-{% if can_edit %}
-    <button onclick="showMoveTaskControls()">Move Task to Another Column</button>
-{% else %}
-    <button disabled style="opacity: 0.85; cursor: not-allowed;">Move Task to Another Column</button>
-{% endif %}
-<!-- Task Move Controls -->
-<div id="task-move-controls" style="display: none; margin-top: 20px;" {% if not can_edit %}hidden{% endif %}>
-    <h3>Move Task: <span id="selected-task-name"></span></h3>
-    <p>Choose the new status:</p>
-    <label><input type="radio" name="status" value="todo"> To Do</label><br>
-    <label><input type="radio" name="status" value="in_progress"> In Progress</label><br>
-    <label><input type="radio" name="status" value="done"> Done</label><br><br>
-    <button onclick="moveTask()">Confirm Move</button>
-    <button onclick="cancelMoveTask()">Cancel</button>
-</div>
-
-<!-- Board View with columns for task statuses -->
-<div class="kanban-board" style="display: flex; justify-content: space-between; gap: 10px;">
-    <!-- In To Do Column -->
-    <div class="column todo" style="background-color: #a6d96a; border: solid 3px black; padding: 10px; flex: 1;">
-        <h2>To Do</h2>
-        {% for task in tasks.todo %}
-            <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
-            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
-            <p>{{ task.title }}</p>
-            <p>Priority: {{ task.get_priority_display }}</p>
-            <p>Due: {{ task.due_date }}</p>
-            </div>
-        {% endfor %}
-    </div>
-
-    <!-- In Progress Column -->
-    <div class="column in-progress" style="background-color: #ffffbf; border: solid 3px black; padding: 10px; flex: 1;">
-        <h2>In Progress</h2>
-        {% for task in tasks.in_progress %}
-            <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
-            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
-            <p>{{ task.title }}</p>
-            <p>Priority: {{ task.get_priority_display }}</p>
-            <p>Due: {{ task.due_date }}</p>
-            </div>
-        {% endfor %}
-    </div>
-
-    <!-- Done Column -->
-    <div class="column done" style="background-color: #fee08b; border: solid 3px black; padding: 10px; flex: 1;">
-        <h2>Done</h2>
-        {% for task in tasks.done %}
-        <div class="task-card" style="background-color: white; margin-bottom: 10px; padding: 10px; border: solid 1px gray; cursor: pointer;"
-            onclick="openTaskDetails({{ task.id }})" id="task-{{ task.id }}">
-            <p>{{ task.title }}</p>
-            <p>Priority: {{ task.get_priority_display }}</p>
-            <p>Due: {{ task.due_date }}</p>
-        </div>
-        {% endfor %}
-    </div>
-    
 </div>
 
 <script>

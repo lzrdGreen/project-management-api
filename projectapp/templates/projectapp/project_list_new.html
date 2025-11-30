@@ -23,7 +23,7 @@
         </div>
         <p>Progress: {{ project.progress }}%</p>
         
-        <p>Description: {{ project.description }}</p>
+        <p><strong>Description:</strong> {{ project.description }}</p>
         <form style="display:none;" method="POST">
             {% csrf_token %}
         </form>

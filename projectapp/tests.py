@@ -369,8 +369,9 @@ class ProjectCrudTest(TestCase):
             'status': 'todo' # Assuming ProjectForm handles status/fields
         })
         
-        # Should redirect to project_list on success (200 OK after redirect)
-        self.assertRedirects(response, reverse('project_list'))
+        new_project = Project.objects.get(title='New Test Project')
+        expected_url = reverse('project_detail', kwargs={'pk': new_project.pk})
+        self.assertRedirects(response, expected_url)
         # Assert object was created
         self.assertTrue(Project.objects.filter(title='New Test Project').exists())
 

@@ -276,6 +276,19 @@ class MilestoneSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"project": "Cannot change the project of an existing milestone."})        
         
         return data
+    
+    def create(self, validated_data):
+        instance = Milestone(**validated_data)
+        instance.full_clean() 
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.full_clean() 
+        instance.save()
+        return instance
 
 class ProjectSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)

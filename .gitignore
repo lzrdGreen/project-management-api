@@ -15,6 +15,7 @@ local_settings.py
 staticfiles/
 *.pot
 *.mo
+django_cache_files/
 
 */migrations/__pycache__/
 

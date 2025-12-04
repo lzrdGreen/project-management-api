@@ -3,6 +3,7 @@ from datetime import date
 from .models import Project, Task, Milestone, Tag
 from django.db.models import Count, Max
 from rest_framework.exceptions import ValidationError
+from django.urls import reverse
 
 # Serializers for the models, used to convert data
 # to and from JSON for API requests and responses.
@@ -18,6 +19,11 @@ class TagSerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    # This field generates the hyperlink for the specific task instance.
+    url = serializers.HyperlinkedIdentityField(
+        view_name='api-tasks-detail',
+        read_only=True
+    )
     # --- Tag fields ---
     tags = TagSerializer(many=True, read_only=True)
     tag_ids = serializers.PrimaryKeyRelatedField(
@@ -29,7 +35,7 @@ class TaskSerializer(serializers.ModelSerializer):
     new_tags = serializers.CharField(write_only=True, required=False)
     
     # --- Project info ---
-    project_title = serializers.ReadOnlyField(source='project.title')
+    project_info = serializers.SerializerMethodField()
     
     milestone = serializers.PrimaryKeyRelatedField(
         queryset=Milestone.objects.all(),
@@ -47,10 +53,20 @@ class TaskSerializer(serializers.ModelSerializer):
     prerequisite_task_ids = serializers.SerializerMethodField()
     prerequisite_titles = serializers.SerializerMethodField()
 
+    def get_project_info(self, obj):
+        """Returns the project's title and its canonical URL."""
+        project_url = self.context['request'].build_absolute_uri(
+            reverse('api-projects-detail', kwargs={'pk': obj.project.pk})
+        )
+        return {
+            'title': obj.project.title,
+            'url': project_url
+        }
+    
     class Meta:
         model = Task
         fields = [
-            'id', 'title', 'description', 'start_date', 'due_date', 'priority', 'status', 'created_at', 'project', 'project_title', 'milestone',
+            'url', 'id', 'title', 'description', 'start_date', 'due_date', 'priority', 'status', 'created_at', 'project', 'project_info', 'milestone',
             'prerequisite_tasks', 'prerequisite_task_ids', 'prerequisite_titles',
             'tags', 'tag_ids', 'new_tags'
         ]
@@ -241,23 +257,71 @@ class TaskSerializer(serializers.ModelSerializer):
 
         return instance
 
+class SimpleTaskSerializer(serializers.ModelSerializer):
+    """
+    A lightweight serializer used exclusively for nesting Tasks inside 
+    Milestone and Project detail responses.
+
+    It includes only essential, non-recursive fields (like URL, ID, Title, 
+    Status, and Due Date) to prevent response bloat and circular dependencies.
+    It provides a summary and a clickable link to the full Task detail.
+    """
+    # Add the hyperlink for the task detail view
+    url = serializers.HyperlinkedIdentityField(
+        view_name='api-tasks-detail', 
+        read_only=True
+    )
+    class Meta:
+        model = Task
+        fields = ['url', 'id', 'title', 'status', 'due_date']
+
+class SimpleMilestoneSerializer(serializers.ModelSerializer):
+    """
+    A lightweight serializer used for nesting Milestones inside 
+    Project detail responses, providing only summary data and a direct URL.
+    This prevents deep nesting of all associated tasks in the project view.
+    """
+    url = serializers.HyperlinkedIdentityField(
+        view_name='api-milestones-detail', 
+        read_only=True
+    )
+    is_complete = serializers.ReadOnlyField() 
+
+    class Meta:
+        model = Milestone
+        fields = ['url', 'id', 'name', 'due_date', 'is_complete']
 
 class MilestoneSerializer(serializers.ModelSerializer):
     # Read-only field derived from the @property in the Milestone model
     is_complete = serializers.ReadOnlyField() 
     
     # Read-only titles for ease of display (e.g., in a dropdown on the client)
-    project_title = serializers.ReadOnlyField(source='project.title')
+    project_info = serializers.SerializerMethodField()
+    tasks = SimpleTaskSerializer(many=True, read_only=True)
 
     class Meta:
         model = Milestone
         fields = [
-            'id', 'project', 'project_title', 'name', 'description', 
+            'id', 'project', 'project_info', 'name', 'description', 
             'due_date', 'milestone_type', 'is_complete', 
-            'created_at', 'updated_at'
+            'created_at', 'updated_at',
+            'tasks'
         ]
         read_only_fields = ['created_at', 'updated_at', 'project']
 
+    def get_project_info(self, obj):
+        """Returns the project's title and its canonical URL."""
+        if not obj.project:
+            return None
+            
+        project_url = self.context['request'].build_absolute_uri(
+            reverse('api-projects-detail', kwargs={'pk': obj.project.pk})
+        )
+        return {
+            'title': obj.project.title,
+            'url': project_url
+        }
+        
     # --- Validation ---
     
     def validate_due_date(self, value):
@@ -290,17 +354,20 @@ class MilestoneSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-class ProjectSerializer(serializers.ModelSerializer):
-    tasks = TaskSerializer(many=True, read_only=True)
-    milestones = MilestoneSerializer(many=True, read_only=True)
+class ProjectSerializer(serializers.HyperlinkedModelSerializer):
+    tasks = SimpleTaskSerializer(many=True, read_only=True)
+    milestones = SimpleMilestoneSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     progress = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Project
-        fields = ['id', 'title', 'description', 'created_at', 'progress', 'tasks', 'tags', 'milestones']
+        fields = ['url', 'id', 'title', 'description', 'created_at', 'progress', 'tasks', 'tags', 'milestones']
+        extra_kwargs = {
+            'url': {'view_name': 'api-projects-detail'}
+        }
 
-class ProjectListSerializer(serializers.ModelSerializer):
+class ProjectListSerializer(serializers.HyperlinkedModelSerializer):
     task_count = serializers.IntegerField(read_only=True)
     milestone_count = serializers.IntegerField(read_only=True)
     latest_due_date = serializers.DateField(read_only=True)
@@ -309,6 +376,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
+            'url',
             'id',
             'title',
             'description',
@@ -318,3 +386,6 @@ class ProjectListSerializer(serializers.ModelSerializer):
             'milestone_count',
             'latest_due_date',
         ]
+        extra_kwargs = {
+            'url': {'view_name': 'api-projects-detail'}
+        }

@@ -415,3 +415,109 @@ class TaskAPITests(APITestCase):
         # 5. Ensure the cycle was not actually created
         task_a.refresh_from_db()
         self.assertFalse(task_a.prerequisite_tasks.filter(id=task_c.id).exists())
+        
+# =====================================================================
+#  TAG DETAIL + LIST API TESTS (TagViewSet)
+# =====================================================================
+class TagDetailAPITests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alex", password="pass")
+        perms = ["add_tag", "view_tag", "change_tag", "delete_tag"]
+        for p in perms:
+            self.user.user_permissions.add(Permission.objects.get(codename=p))
+        self.client.login(username="alex", password="pass")
+
+        # Main project
+        self.project = Project.objects.create(title="TP")
+
+        # Tasks for this project
+        self.task1 = Task.objects.create(
+            project=self.project,
+            title="Task 1",
+            due_date=date.today()
+        )
+        self.task2 = Task.objects.create(
+            project=self.project,
+            title="Task 2",
+            due_date=date.today()
+        )
+
+        # Tag belonging to project
+        self.tag = Tag.objects.create(
+            name="Finance",
+            project=self.project
+        )
+
+        # Associate tasks with tag
+        self.task1.tags.add(self.tag)
+        self.task2.tags.add(self.tag)
+
+        self.list_url = reverse("api-tags-list")
+        self.detail_url = reverse("api-tags-detail", args=[self.tag.id])
+
+    # ---------------------------------------------------------------
+    # LIST VIEW SHOULD NOT INCLUDE TASKS
+    # ---------------------------------------------------------------
+    def test_tag_list_does_not_include_tasks(self):
+        resp = self.client.get(self.list_url)
+        self.assertEqual(resp.status_code, 200)
+
+        tag_data = resp.data[0]
+
+        # Ensure "tasks" field is NOT present in list serializer
+        self.assertNotIn("tasks", tag_data)
+        self.assertIn("name", tag_data)
+
+    # ---------------------------------------------------------------
+    # DETAIL VIEW SHOULD INCLUDE TASKS
+    # ---------------------------------------------------------------
+    def test_tag_detail_includes_tasks(self):
+        resp = self.client.get(self.detail_url)
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertIn("tasks", resp.data)
+        self.assertEqual(len(resp.data["tasks"]), 2)
+
+        returned_ids = {t["id"] for t in resp.data["tasks"]}
+        self.assertSetEqual(returned_ids, {self.task1.id, self.task2.id})
+
+    # ---------------------------------------------------------------
+    # TASKS MUST BELONG ONLY TO THIS TAG
+    # ---------------------------------------------------------------
+    def test_tag_detail_does_not_include_foreign_tasks(self):
+        # Task in same project but NOT tagged
+        foreign_task = Task.objects.create(
+            project=self.project,
+            title="Foreign",
+            due_date=date.today()
+        )
+
+        resp = self.client.get(self.detail_url)
+        self.assertEqual(resp.status_code, 200)
+
+        returned_ids = {t["id"] for t in resp.data["tasks"]}
+        self.assertNotIn(foreign_task.id, returned_ids)
+
+    # ---------------------------------------------------------------
+    # CROSS-PROJECT LEAK TEST — ensure tasks from other project never appear
+    # ---------------------------------------------------------------
+    def test_tag_detail_never_leaks_tasks_from_other_project(self):
+        other_project = Project.objects.create(title="OtherProj")
+        other_task = Task.objects.create(
+            project=other_project,
+            title="OtherTask",
+            due_date=date.today()
+        )
+        other_tag = Tag.objects.create(
+            project=other_project,
+            name="OtherTag"
+        )
+        other_task.tags.add(other_tag)
+
+        resp = self.client.get(self.detail_url)
+        self.assertEqual(resp.status_code, 200)
+
+        returned_ids = {t["id"] for t in resp.data["tasks"]}
+        self.assertNotIn(other_task.id, returned_ids)
+        

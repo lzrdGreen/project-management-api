@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import Project, Task, Tag, Milestone
-from .serializers import ProjectSerializer, TaskSerializer, TagSerializer, MilestoneSerializer, ProjectListSerializer
+from .serializers import ProjectSerializer, TaskSerializer, TagSerializer, MilestoneSerializer, ProjectListSerializer, TagDetailSerializer
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -60,5 +60,19 @@ class MilestoneViewSet(viewsets.ModelViewSet):
 
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.select_related('project').all()
-    serializer_class = TagSerializer
+    #serializer_class = TagSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly,permissions.DjangoModelPermissions]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Only optimize the detail view
+        if self.action == 'retrieve':
+            queryset = queryset.prefetch_related('tasks')
+
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return TagDetailSerializer
+        return TagSerializer

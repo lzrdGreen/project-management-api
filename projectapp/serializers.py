@@ -9,14 +9,17 @@ from django.urls import reverse
 # to and from JSON for API requests and responses.
 
 class TagSerializer(serializers.ModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name='api-tags-detail',
+        read_only=True
+    )
     project = serializers.SlugRelatedField(
         slug_field='title',  # Use the 'title' attribute of the Project model
         queryset=Project.objects.all()
     )
     class Meta:
         model = Tag
-        fields = ['id', 'name', 'project']
-
+        fields = ['url', 'id', 'name', 'project']
 
 class TaskSerializer(serializers.ModelSerializer):
     # This field generates the hyperlink for the specific task instance.
@@ -389,3 +392,9 @@ class ProjectListSerializer(serializers.HyperlinkedModelSerializer):
         extra_kwargs = {
             'url': {'view_name': 'api-projects-detail'}
         }
+        
+class TagDetailSerializer(TagSerializer):
+    tasks = SimpleTaskSerializer(many=True, read_only=True)
+
+    class Meta(TagSerializer.Meta):
+        fields = TagSerializer.Meta.fields + ['tasks']

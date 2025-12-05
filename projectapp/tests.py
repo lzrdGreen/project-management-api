@@ -122,8 +122,9 @@ class TaskTests(TestCase):
 
     def setUp(self):
         self.p = Project.objects.create(title="P")
-        self.m1 = Milestone.objects.create(project=self.p, name="M1", due_date=date.today())
-        self.m2 = Milestone.objects.create(project=self.p, name="M2", due_date=date.today())
+        initial_date = date.today() - timedelta(days=1)
+        self.m1 = Milestone.objects.create(project=self.p, name="M1", due_date=initial_date)
+        self.m2 = Milestone.objects.create(project=self.p, name="M2", due_date=initial_date)
 
     def test_task_overdue(self):
         overdue = Task.objects.create(project=self.p, title="A",

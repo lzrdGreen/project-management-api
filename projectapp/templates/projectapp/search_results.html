@@ -40,4 +40,18 @@
 {% else %}
     <p>No tasks found matching your search query.</p>
 {% endif %}
+<h2>Milestone Results</h2>
+{% if milestone_results %}
+<ul>
+    {% for milestone in milestone_results %}
+    <li>
+        <h3><a href="{% url 'milestone_detail' pk=milestone.id %}">{{ milestone.name|highlight:query }}</a> (Project: {{ milestone.project.title }})</h3>
+        <p>{{ milestone.description|highlight:query }}</p>
+        <p><small>Due Date: {{ milestone.due_date|date:"F j, Y" }}</small></p>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+    <p>No milestones found matching your search query.</p>
+{% endif %}
 {% endblock %}

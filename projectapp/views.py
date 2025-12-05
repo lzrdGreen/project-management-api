@@ -1,6 +1,6 @@
 import json
 from datetime import date
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from django.db.models.functions import Lower
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
@@ -63,16 +63,47 @@ class ProjectListView(ListView):
 
     def get_queryset(self):
         sort_by = self.request.GET.get('sort', 'title')
-        qs = Project.objects.prefetch_related('tasks').all()
+        
+        # 1. Use Prefetch to efficiently fetch tasks (with ordering) and milestones.
+        #    - 'tasks' prefetch:
+        #      - Uses select_related('milestone') to avoid an N+1 when calculating
+        #        task details or accessing task.milestone later.
+        #      - Orders tasks for a predictable display in the template.
+        #    - 'milestones' prefetch: Solves the N+1 problem when accessing 
+        #      {% for milestone in project.milestones.all %} in the template.
+        qs = Project.objects.prefetch_related(
+            'milestones', 
+            Prefetch(
+                'tasks', 
+                queryset=Task.objects.select_related('milestone').order_by('due_date', '-priority')
+            )
+        )
 
+        # 2. Add Annotations for efficient task counting
+        #    - Annotate the Task count directly onto the Project objects (total_tasks).
+        #    - Annotate the Milestone's task count using a separate Prefetch query.
+        
+        # Note: We can't easily calculate total_tasks for the whole project here 
+        # without affecting the sort logic. We will rely on the Project.progress 
+        # method which handles the calculation dynamically.
+        
+        # To fix the {{ milestone.tasks.count }} issue, we can't easily fix it here
+        # without complicating the `qs.distinct()` logic needed for sorting.
+        # Instead, we will fix the model layer (See section 2).
+        
+        # 3. Handle Sorting
         if sort_by == 'priority':
-            qs = qs.order_by('tasks__priority')
+            # Sorting on related fields requires a join and distinct()
+            qs = qs.order_by('tasks__priority', 'title')
         elif sort_by == 'due_date':
-            qs = qs.order_by('tasks__due_date')
+            # Sorting on related fields requires a join and distinct()
+            qs = qs.order_by('tasks__due_date', 'title')
         else:
+            # Simple sorting by title is most efficient
             qs = qs.order_by('title')
 
-        
+        # distinct() is required when ordering by related fields (tasks__...)
+        # to prevent duplicate projects from the join.
         return qs.distinct()
 
     def get_context_data(self, **kwargs):
@@ -492,12 +523,16 @@ def search(request):
 
     project_results = Project.objects.all()
     task_results = Task.objects.all()
+    milestone_results = Milestone.objects.all()
 
-    if query:
-        project_filter = Q(title__icontains=query) | Q(description__icontains=query)
-        task_filter = Q(title__icontains=query) | Q(description__icontains=query)
-        project_results = project_results.filter(project_filter).distinct()
-        task_results = task_results.filter(task_filter).distinct()
+    if query:        
+        title_description_filter = Q(title__icontains=query) | Q(description__icontains=query)
+        
+        project_results = project_results.filter(title_description_filter).distinct()
+        task_results = task_results.filter(title_description_filter).distinct()
+        
+        milestone_filter = Q(name__icontains=query) | Q(description__icontains=query)
+        milestone_results = milestone_results.filter(milestone_filter).distinct()
 
     if sort_by == 'priority':
         project_results = project_results.order_by('tasks__priority')
@@ -505,11 +540,16 @@ def search(request):
     elif sort_by == 'due_date':
         project_results = project_results.order_by('tasks__due_date')
         task_results = task_results.order_by('due_date')
-
+    if sort_by == 'due_date':
+        milestone_results = milestone_results.order_by('due_date')
+    else: # Default or 'title' sort for Milestones
+        milestone_results = milestone_results.order_by('name')
+        
     u = request.user
     context = {
         'project_results': project_results,
         'task_results': task_results,
+        'milestone_results': milestone_results,
         'sort_by': sort_by,
         'query': query,
         'can_add_task': u.has_perm('projectapp.add_task'),
@@ -517,6 +557,9 @@ def search(request):
         'can_delete_task': u.has_perm('projectapp.delete_task'),
         'can_change_project': u.has_perm('projectapp.change_project'),
         'can_delete_project': u.has_perm('projectapp.delete_project'),
+        'can_add_milestone': u.has_perm('projectapp.add_milestone'),
+        'can_change_milestone': u.has_perm('projectapp.change_milestone'),
+        'can_delete_milestone': u.has_perm('projectapp.delete_milestone'),
     }
     return render(request, 'projectapp/search_results.html', context)
 

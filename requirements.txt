@@ -8,3 +8,4 @@ PyJWT==2.10.1
 sqlparse==0.4.4
 typing_extensions==4.15.0
 tzdata==2025.2
+python-dotenv==1.2.1
